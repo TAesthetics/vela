@@ -2,6 +2,7 @@ import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
 import { GROK_PROVIDERS } from "./providers";
+import { isNativeApp } from "../native";
 
 /**
  * Better Auth client for this React SPA (browser-side).
@@ -128,6 +129,11 @@ export async function signIn(
     requestSignOut: () => authClient.signOut(),
     clearToken: () => setBearerToken(null),
   });
+
+  if (isNativeApp()) {
+    await nativeSignIn(providerId, callbackURL);
+    return;
+  }
 
   if (handoff) {
     if (!popup) {
@@ -325,6 +331,97 @@ async function completePreviewSignIn(code: string, startedAt: number, callbackUR
   if (dest.origin !== here.origin || dest.pathname !== here.pathname || dest.search !== here.search) {
     window.location.href = callbackURL;
   }
+}
+
+// ── Native app (iOS / Android) ──────────────────────────────────────────────
+// Google and X block OAuth inside embedded webviews, so the store app signs in
+// in the SYSTEM browser and returns via the vela://auth deep link. A secret
+// verifier never leaves this webview; the browser only sees its SHA-256. See
+// `native-handoff.server.ts` for the server side.
+const NATIVE_PENDING_KEY = "vela.native-sign-in";
+type NativePending = { verifier: string; callbackURL: string; startedAt: number };
+let nativeWaiter: ((result: HandoffResult) => void) | null = null;
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  let binary = "";
+  for (const byte of digest) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function readNativePending(): NativePending | null {
+  try {
+    const pending = JSON.parse(window.localStorage.getItem(NATIVE_PENDING_KEY) ?? "null") as NativePending | null;
+    if (!pending || Date.now() - pending.startedAt > HANDOFF_WINDOW_MS) return null;
+    return pending;
+  } catch {
+    return null;
+  }
+}
+
+async function nativeSignIn(providerId: string, callbackURL: string): Promise<void> {
+  const verifier = newHandoffCode();
+  const challenge = await sha256Base64Url(verifier);
+  const pending: NativePending = { verifier, callbackURL, startedAt: Date.now() };
+  window.localStorage.setItem(NATIVE_PENDING_KEY, JSON.stringify(pending));
+  const result = new Promise<HandoffResult>((resolve) => {
+    const timer = window.setTimeout(() => finish({ token: null, error: "timeout" }), HANDOFF_WINDOW_MS);
+    function finish(value: HandoffResult) {
+      window.clearTimeout(timer);
+      nativeWaiter = null;
+      if (cancelWaiting === cancel) cancelWaiting = null;
+      resolve(value);
+    }
+    const cancel = () => finish({ token: null, error: "cancelled" });
+    cancelWaiting?.();
+    cancelWaiting = cancel;
+    nativeWaiter = finish;
+  });
+  const { Browser } = await import("@capacitor/browser");
+  await Browser.open({
+    url: `${window.location.origin}/auth/native?providerId=${encodeURIComponent(providerId)}&challenge=${challenge}`,
+    presentationStyle: "popover",
+  });
+  const outcome = await result;
+  if (outcome.error === "cancelled") {
+    window.localStorage.removeItem(NATIVE_PENDING_KEY);
+    return;
+  }
+  if (!outcome.token) throw new Error(signInErrorMessage(outcome.error));
+}
+
+/**
+ * Handle the vela://auth deep link in the native app: exchange verifier +
+ * grant for the session cookie, then reload signed in. Registered by
+ * `<NativeShell />`.
+ */
+export async function completeNativeSignIn(deepLink: string): Promise<void> {
+  const params = new URL(deepLink.replace(/^vela:\/\//, "https://vela.invalid/")).searchParams;
+  const pending = readNativePending();
+  window.localStorage.removeItem(NATIVE_PENDING_KEY);
+  try {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.close();
+  } catch {
+    /* already closed (Android custom tab) */
+  }
+  const fail = (code: string) => {
+    if (nativeWaiter) nativeWaiter({ token: null, error: code });
+    else window.location.href = `/?error=${encodeURIComponent(code)}`;
+  };
+  const grant = params.get("grant");
+  if (!grant) return fail(params.get("error") ?? "sign_in_failed");
+  if (!pending) return fail("please_restart_the_process");
+  const res = await fetch("/auth/native", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ verifier: pending.verifier, grant }),
+    credentials: "same-origin",
+  }).catch(() => null);
+  if (!res?.ok) return fail("please_restart_the_process");
+  nativeWaiter?.({ token: "cookie" });
+  // Full reload so every request now rides the fresh session cookie.
+  window.location.href = pending.callbackURL || "/";
 }
 
 /**
