@@ -54,7 +54,28 @@ Adresse zuerst registriert.
 - Startseite öffnen, „Registrieren“, Profil anlegen.
 - `/admin` mit der Adresse aus `ADMIN_EMAILS`.
 
+## 6. Vela+ mit Stripe (10 € / Monat)
+
+Stripe Checkout (gehostete Bezahlseite) im Abo-Modus. Karte, Apple Pay und Google Pay
+erscheinen dort automatisch, wenn sie in Stripe unter **Einstellungen → Zahlungsmethoden**
+aktiv sind. Ohne `STRIPE_SECRET_KEY` zeigt die App „Zahlungen sind noch nicht eingerichtet“.
+
+| Variable | Wert |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | Stripe → Entwickler → API-Schlüssel → Geheimer Schlüssel (`sk_live_…`, zum Testen `sk_test_…`) |
+| `STRIPE_WEBHOOK_SECRET` | Signatur-Geheimnis (`whsec_…`) des Webhooks unten |
+| `STRIPE_PRICE_ID` | optional `price_…`; ohne wird 10 € / Monat direkt im Code angelegt |
+
+Webhook (Stripe → Entwickler → Webhooks → Endpunkt hinzufügen):
+`https://<deine-domain>/api/stripe/webhook` mit den Ereignissen
+`checkout.session.completed`, `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`.
+
+„Abo verwalten“ öffnet das Stripe-Kundenportal: einmal unter
+**Einstellungen → Billing → Kundenportal** aktivieren (Kündigen erlauben, „zum Ende des
+Abrechnungszeitraums“).
+
 ## Hinweise
 
-- Hosting Vercel + Datenbank Neon steht so in `/datenschutz` (Punkt 9).
+- Hosting Vercel + Datenbank Neon steht so in `/datenschutz` (Punkt 10), Stripe in Punkt 8.
 - Für die Handy-App (`docs/STORE.md`) ist `VELA_APP_URL` die gleiche Adresse wie `BETTER_AUTH_URL`.
