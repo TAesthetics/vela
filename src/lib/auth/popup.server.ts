@@ -16,7 +16,42 @@
  * React route here paints the full app shell in the popup. The opener lives in
  * `client.ts` (`signIn` → `openSignInPopup`).
  */
+import { createHash } from "node:crypto";
 import { auth, SESSION_TOKEN_COOKIE } from "./server";
+
+/**
+ * Server-side one-time hand-off. The opener creates a random code and passes it
+ * to the popup; the completion page stores the session token under the code's
+ * hash, and the opener claims it once via `GET /auth/popup?claim=<code>`.
+ *
+ * Needed because Google/X send Cross-Origin-Opener-Policy: after the round-trip
+ * the popup has no `window.opener` (postMessage can't arrive) and the opener
+ * already sees `popup.closed === true` — especially on phones, where the popup
+ * is a separate tab. Lives on globalThis so a Vite module reload keeps it.
+ */
+type Handoff = { token: string | null; error?: string; expires: number };
+const HANDOFF_TTL_MS = 3 * 60_000;
+const handoffRef = globalThis as typeof globalThis & { __velaAuthHandoff__?: Map<string, Handoff> };
+const handoffs = (handoffRef.__velaAuthHandoff__ ??= new Map<string, Handoff>());
+
+function handoffCode(value: string | null): string | null {
+  return value && /^[A-Za-z0-9_-]{32,128}$/.test(value) ? value : null;
+}
+
+function handoffKey(code: string): string {
+  return createHash("sha256").update(code).digest("hex");
+}
+
+function pruneHandoffs(now = Date.now()) {
+  for (const [key, entry] of handoffs) if (entry.expires <= now) handoffs.delete(key);
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
+}
 
 /** Message shape the popup posts to the opener (must match `client.ts`). */
 type PopupMessage = {
@@ -33,6 +68,17 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
   const url = new URL(request.url);
   const done = url.searchParams.get("done") === "1";
 
+  if (url.searchParams.has("claim")) {
+    const code = handoffCode(url.searchParams.get("claim"));
+    if (!code) return json({ status: "invalid" }, 400);
+    pruneHandoffs();
+    const key = handoffKey(code);
+    const entry = handoffs.get(key);
+    if (!entry) return json({ status: "pending" });
+    handoffs.delete(key);
+    return json({ status: "done", token: entry.token, error: entry.error ?? null });
+  }
+
   if (done) {
     const errored = url.searchParams.has("error");
     const token = errored ? null : readCookie(request, SESSION_TOKEN_COOKIE);
@@ -40,7 +86,17 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
       source: "grok-auth-popup",
       token,
       ...(errored ? { error: url.searchParams.get("error") ?? "sign_in_failed" } : {}),
+      ...(!errored && !token ? { error: "no_session" } : {}),
     };
+    const code = handoffCode(url.searchParams.get("code"));
+    if (code) {
+      pruneHandoffs();
+      handoffs.set(handoffKey(code), {
+        token: message.token,
+        error: message.error,
+        expires: Date.now() + HANDOFF_TTL_MS,
+      });
+    }
     return new Response(completionHtml(message), {
       status: 200,
       headers: {
@@ -60,7 +116,8 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
   }
 
   // Stay first-party for the callback so the session cookie lands in THIS popup.
-  const back = `${url.origin}/auth/popup?done=1`;
+  const code = handoffCode(url.searchParams.get("code"));
+  const back = `${url.origin}/auth/popup?done=1${code ? `&code=${code}` : ""}`;
   try {
     const apiRes = await auth.api.signInWithOAuth2({
       body: {
@@ -80,7 +137,7 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
         source: "grok-auth-popup",
         token: null,
         error: detail || `oauth_init_failed_${apiRes.status}`,
-      });
+      }, code);
     }
 
     const body = (await apiRes.json().catch(() => null)) as {
@@ -92,7 +149,7 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
         source: "grok-auth-popup",
         token: null,
         error: "oauth_init_missing_url",
-      });
+      }, code);
     }
 
     // 302 to the broker (which headlessly forwards to Google/X). Forward any
@@ -108,11 +165,15 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
       source: "grok-auth-popup",
       token: null,
       error: message,
-    });
+    }, code);
   }
 }
 
-function completionResponse(message: PopupMessage): Response {
+function completionResponse(message: PopupMessage, code?: string | null): Response {
+  if (code) {
+    pruneHandoffs();
+    handoffs.set(handoffKey(code), { token: null, error: message.error, expires: Date.now() + HANDOFF_TTL_MS });
+  }
   return new Response(completionHtml(message), {
     status: 200,
     headers: {

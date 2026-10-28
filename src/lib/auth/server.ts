@@ -36,6 +36,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
+import { isWorkspacePreview } from "../env.server";
 import { emailAndPasswordEnabled } from "./email-password";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
 import { GROK_PROVIDERS } from "./providers";
@@ -192,12 +193,11 @@ export const auth = betterAuth({
   // never merges them into one user — they stay separate identities.
   account: {
     encryptOAuthTokens: true,
-    // Phones and in-app browsers drop the short-lived `better-auth.state` cookie
-    // while bouncing through the broker to Google/X. The state is still a
-    // single-use random value stored in the database; without this, every
-    // mobile sign-in dies with "State not persisted correctly" and returns to
-    // the sign-in screen.
-    skipStateCookieCheck: true,
+    // Only in the sandbox preview: its sign-in popup can lose the short-lived
+    // state cookie on phones (separate tab, partitioned storage). The state is
+    // still a single-use random value in the database. Deployed apps use a
+    // same-tab redirect, so they keep the cookie check (login-CSRF protection).
+    skipStateCookieCheck: isWorkspacePreview(),
     accountLinking: {
       enabled: true,
       trustedProviders: [

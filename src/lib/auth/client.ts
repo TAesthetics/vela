@@ -113,7 +113,9 @@ export async function signIn(
   // Open the popup SYNCHRONOUSLY on the user gesture — before any await
   // (including signOut). Awaiting first drops user-gesture privilege in some
   // browsers when the opener is a cross-origin live-preview iframe.
-  const popup = inLivePreview() ? openSignInPopup(providerId) : null;
+  const handoff = inLivePreview() ? newHandoffCode() : null;
+  const popup = handoff ? openSignInPopup(providerId, handoff) : null;
+  if (handoff) savePending({ code: handoff, callbackURL, startedAt: Date.now() });
 
   // Clear any prior session so switching providers actually switches identity.
   // Bounded because the popup is already open — a request that never settles
@@ -127,26 +129,12 @@ export async function signIn(
     clearToken: () => setBearerToken(null),
   });
 
-  if (inLivePreview()) {
-    if (!popup) throw new Error("Pop-up blocked — allow pop-ups for sign-in");
-    const token = await waitForPopupToken(popup);
-    if (!token) throw new Error("Sign-in was cancelled or failed");
-    setBearerToken(token);
-    // Refresh the client session store with the bearer attached (onRequest).
-    // Avoid a full iframe reload when we're already on the destination — that
-    // reload was the slow "still loading after the popup closed" feeling.
-    try {
-      await authClient.getSession();
-    } catch {
-      /* session store will recover on next useSession fetch */
+  if (handoff) {
+    if (!popup) {
+      clearPending();
+      throw new Error("Das Anmeldefenster wurde blockiert. Bitte erlaube Pop-ups für diese Seite.");
     }
-    if (typeof window !== "undefined") {
-      const dest = new URL(callbackURL, window.location.origin);
-      const here = window.location;
-      if (dest.origin !== here.origin || dest.pathname !== here.pathname || dest.search !== here.search) {
-        window.location.href = callbackURL;
-      }
-    }
+    await completePreviewSignIn(handoff, Date.now(), callbackURL);
     return;
   }
 
@@ -168,49 +156,188 @@ export async function signIn(
  * iframe the about:blank dance often fails on the first click and the window
  * ends up showing the app shell.
  */
-function openSignInPopup(providerId: string): Window | null {
+function openSignInPopup(providerId: string, code: string): Window | null {
   const origin = window.location.origin;
-  const url = `${origin}/auth/popup?providerId=${encodeURIComponent(providerId)}`;
+  const url = `${origin}/auth/popup?providerId=${encodeURIComponent(providerId)}&code=${code}`;
   // Unique name per attempt so a prior attempt stuck on the SPA is not reused.
   const name = `grok-signin-${Date.now()}`;
   return window.open(url, name, "popup,width=500,height=650");
 }
 
-/**
- * Wait for the popup's completion page to postMessage the session bearer (or
- * for the user to dismiss the popup).
- */
-function waitForPopupToken(popup: Window): Promise<string | null> {
+// ── Live-preview hand-off ────────────────────────────────────────────────────
+// `popup.closed` is not trustworthy: Google/X set Cross-Origin-Opener-Policy, so
+// after the round-trip the opener sees the popup as closed and the popup has no
+// opener to postMessage to (on phones the popup is a separate tab). Instead the
+// popup's completion page stores the token server-side under a one-time code,
+// and we poll `/auth/popup?claim=<code>` for up to 3 minutes. A postMessage, if
+// it does arrive, simply wins the race.
+const PENDING_KEY = "grok-auth.pending-sign-in";
+const HANDOFF_WINDOW_MS = 3 * 60_000;
+const CLAIM_INTERVAL_MS = 1500;
+
+type PendingSignIn = { code: string; callbackURL: string; startedAt: number };
+type HandoffResult = { token: string | null; error?: string };
+
+let cancelWaiting: (() => void) | null = null;
+
+function newHandoffCode(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function savePending(pending: PendingSignIn) {
+  try {
+    window.sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+  } catch {
+    /* storage unavailable — the in-memory wait still works */
+  }
+}
+
+function readPending(): PendingSignIn | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    const pending = JSON.parse(raw) as PendingSignIn;
+    if (typeof pending?.code !== "string" || typeof pending.startedAt !== "number") return null;
+    if (Date.now() - pending.startedAt > HANDOFF_WINDOW_MS) {
+      clearPending();
+      return null;
+    }
+    return pending;
+  } catch {
+    return null;
+  }
+}
+
+function clearPending() {
+  try {
+    window.sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** True while a preview sign-in started in this tab may still complete. */
+export function hasPendingSignIn(): boolean {
+  return inLivePreview() && readPending() !== null;
+}
+
+/** Stop waiting for a preview sign-in (the "Abbrechen" button). */
+export function cancelSignIn(): void {
+  clearPending();
+  cancelWaiting?.();
+}
+
+/** Human-readable German message for a sign-in error code. */
+export function signInErrorMessage(code: string | null | undefined): string {
+  switch (code) {
+    case "cancelled":
+      return "Anmeldung abgebrochen.";
+    case "timeout":
+      return "Die Anmeldung hat zu lange gedauert. Bitte versuch es noch einmal.";
+    case "access_denied":
+      return "Du hast die Anmeldung abgelehnt.";
+    case "no_session":
+      return "Die Anmeldung kam nicht zurück. Bitte versuch es noch einmal.";
+    case "state_not_found":
+    case "state_mismatch":
+    case "please_restart_the_process":
+      return "Die Anmeldung ist abgelaufen. Bitte starte sie noch einmal, am besten im selben Browser.";
+    default:
+      return `Anmeldung fehlgeschlagen${code ? ` (${code.slice(0, 80)})` : ""}. Bitte versuch es noch einmal.`;
+  }
+}
+
+/** Wait for the token via postMessage OR the server-side claim, max 3 min. */
+function waitForHandoff(code: string, startedAt: number): Promise<HandoffResult> {
   return new Promise((resolve) => {
     const origin = window.location.origin;
     let settled = false;
-    let closeTimer: number | undefined;
-    const settle = (token: string | null) => {
+    let timer: number | undefined;
+    const settle = (result: HandoffResult) => {
       if (settled) return;
       settled = true;
-      cleanup();
-      resolve(token);
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      if (cancelWaiting === cancel) cancelWaiting = null;
+      resolve(result);
     };
-    const onMessage = (event: MessageEvent) => {
+    const cancel = () => settle({ token: null, error: "cancelled" });
+    cancelWaiting?.();
+    cancelWaiting = cancel;
+
+    function onMessage(event: MessageEvent) {
       if (event.origin !== origin) return;
       const data = event.data as PopupMessage | undefined;
       if (!data || data.source !== "grok-auth-popup") return;
-      settle(data.token ?? null);
-    };
-    // Fallback when the user dismisses the popup. Grace period lets the
-    // completion page's postMessage win over a racing `popup.closed`.
-    const pollTimer = window.setInterval(() => {
-      if (!popup.closed) return;
-      window.clearInterval(pollTimer);
-      closeTimer = window.setTimeout(() => settle(null), 400);
-    }, 300);
-    function cleanup() {
-      window.clearInterval(pollTimer);
-      if (closeTimer !== undefined) window.clearTimeout(closeTimer);
-      window.removeEventListener("message", onMessage);
+      // The server copy is single-use; claim it so it does not linger.
+      void fetch(`/auth/popup?claim=${code}`, { cache: "no-store" }).catch(() => undefined);
+      settle({ token: data.token ?? null, error: data.error ?? (data.token ? undefined : "no_session") });
     }
+
+    async function poll() {
+      if (settled) return;
+      if (Date.now() - startedAt > HANDOFF_WINDOW_MS) {
+        settle({ token: null, error: "timeout" });
+        return;
+      }
+      try {
+        const res = await fetch(`/auth/popup?claim=${code}`, { cache: "no-store" });
+        if (res.ok) {
+          const body = (await res.json()) as { status?: string; token?: string | null; error?: string | null };
+          if (body.status === "done") {
+            settle({ token: body.token ?? null, error: body.error ?? (body.token ? undefined : "no_session") });
+            return;
+          }
+        }
+      } catch {
+        /* network blip — keep polling */
+      }
+      if (!settled) timer = window.setTimeout(() => void poll(), CLAIM_INTERVAL_MS);
+    }
+
     window.addEventListener("message", onMessage);
+    void poll();
   });
+}
+
+async function completePreviewSignIn(code: string, startedAt: number, callbackURL: string): Promise<void> {
+  const result = await waitForHandoff(code, startedAt);
+  clearPending();
+  if (!result.token) {
+    if (result.error === "cancelled") return;
+    throw new Error(signInErrorMessage(result.error));
+  }
+  setBearerToken(result.token);
+  // Refresh the client session store with the bearer attached (onRequest).
+  try {
+    await authClient.getSession();
+  } catch {
+    /* session store will recover on next useSession fetch */
+  }
+  authClient.$store.notify("$sessionSignal");
+  const dest = new URL(callbackURL, window.location.origin);
+  const here = window.location;
+  if (dest.origin !== here.origin || dest.pathname !== here.pathname || dest.search !== here.search) {
+    window.location.href = callbackURL;
+  }
+}
+
+/**
+ * After the preview iframe reloads mid sign-in (phones often reload the
+ * backgrounded tab), pick the pending hand-off back up. Resolves true when a
+ * session was established; throws with a readable message on failure.
+ */
+export async function resumePendingSignIn(): Promise<boolean> {
+  if (!inLivePreview()) return false;
+  const pending = readPending();
+  if (!pending) return false;
+  await completePreviewSignIn(pending.code, pending.startedAt, pending.callbackURL);
+  return Boolean(getBearerToken());
 }
 
 /**

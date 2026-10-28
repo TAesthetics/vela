@@ -1,8 +1,52 @@
-import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
+import { useEffect, useState } from "react";
+import {
+  GROK_PROVIDERS,
+  authEnabled,
+  cancelSignIn,
+  hasPendingSignIn,
+  resumePendingSignIn,
+  signIn,
+  signInErrorMessage,
+} from "@/lib/auth/client";
 import { Wordmark } from "@/components/vela/ui";
 import { LegalLinks } from "@/components/vela/legal";
 
 export function SignInPanel() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Deployed redirect flow: Better Auth returns to "/?error=<code>" on failure.
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("error");
+    if (code) {
+      setError(signInErrorMessage(code));
+      params.delete("error");
+      params.delete("error_description");
+      const query = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    }
+    // Preview: the iframe may have reloaded while the sign-in tab was open.
+    if (!hasPendingSignIn()) return;
+    setBusy(true);
+    resumePendingSignIn()
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : signInErrorMessage(null)))
+      .finally(() => setBusy(false));
+  }, []);
+
+  async function start(providerId: string) {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await signIn(providerId, { callbackURL: "/", errorCallbackURL: "/" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : signInErrorMessage(null));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col justify-center">
       <Wordmark />
@@ -21,8 +65,9 @@ export function SignInPanel() {
             <button
               key={provider.providerId}
               type="button"
-              onClick={() => signIn(provider.providerId, { callbackURL: "/" })}
-              className="h-14 rounded-full border border-line text-base text-paper"
+              disabled={busy}
+              onClick={() => void start(provider.providerId)}
+              className="h-14 rounded-full border border-line text-base text-paper disabled:opacity-50"
             >
               Weiter mit {provider.label}
             </button>
@@ -31,6 +76,19 @@ export function SignInPanel() {
           <p className="text-sm text-muted">Anmeldung ist gerade aus.</p>
         )}
       </div>
+      {busy && (
+        <p className="mt-4 text-sm text-muted" role="status">
+          Anmeldung läuft… Schließ sie im neuen Fenster ab und komm dann hierher zurück.{" "}
+          <button type="button" onClick={cancelSignIn} className="underline">
+            Abbrechen
+          </button>
+        </p>
+      )}
+      {error && (
+        <p className="mt-4 rounded-2xl bg-surface p-3 text-sm text-ember" role="alert">
+          {error}
+        </p>
+      )}
       <p className="mt-6 text-xs text-muted">
         Nur ab 18. Wie wir mit deinen Daten umgehen, steht in der Datenschutzerklärung.
       </p>
