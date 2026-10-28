@@ -455,10 +455,11 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
         }}
         className="mt-6 h-11 text-sm text-muted"
       >
-        {arm ? "Profil wirklich löschen" : "Profil löschen"}
+        {arm ? "Konto wirklich löschen" : "Konto löschen"}
       </button>
       <p className="mt-2 text-sm text-muted">
-        Löscht dein Profil, deine Swipes und die Nachrichten, an denen du beteiligt bist.
+        Löscht dein Profil, deinen Login, deine Swipes und die Nachrichten, an denen du beteiligt bist. Meldungen
+        bewahren wir zum Schutz anderer bis zu 12 Monate auf.
       </p>
       <LegalLinks className="mt-8" />
     </div>

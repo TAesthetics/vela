@@ -390,7 +390,11 @@ export const saveProfile = createServerFn({ method: "POST" })
     const me = parsed.me;
     // A suspended person can't edit their way out, and a deleted + re-created
     // profile starts suspended while an age suspension is still open.
-    const suspended = (await statusOf(sql, context.userId)) !== "active" || (await openAgeSuspension(sql, context.userId));
+    const isNew = (await sql`select 1 from vela_profiles where user_id = ${context.userId}`).length === 0;
+    const suspended =
+      (await statusOf(sql, context.userId)) !== "active" ||
+      (await openAgeSuspension(sql, context.userId)) ||
+      (isNew && (await (await ageReview()).carryOverSuspension(sql, context.userId)));
     await sql.query(
       `insert into vela_profiles (user_id, name, age, city, orbit, values, prompts, photo, status, adult_confirmed_at)
        values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, now())
@@ -617,16 +621,36 @@ export const deleteProfile = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const sql = await getSql();
     const id = context.userId;
+    // An open age suspension must not be dodged by deleting and signing in
+    // again: keep only a keyed hash of the login identity (max. 12 months).
+    if (await openAgeSuspension(sql, id)) await (await ageReview()).rememberSuspendedIdentity(sql, id);
     await sql`delete from vela_messages where pair_a = ${id} or pair_b = ${id}`;
     await sql`delete from vela_swipes where from_user = ${id} or to_user = ${id}`;
-    await sql`delete from vela_blocks where from_user = ${id}`;
+    await sql`delete from vela_blocks where from_user = ${id} or to_user = ${id}`;
     await sql`
       update vela_id_checks
       set image = null, status = case when status = 'pending' then 'expired' else status end
       where user_id = ${id} and image is not null
     `;
     await sql`delete from vela_profiles where user_id = ${id}`;
-    return snapshot(sql, context.userId);
+    // DSGVO Art. 17: also delete the login itself. End the session first so its
+    // cookies are cleared in this response, then the user row (sessions and
+    // linked accounts go with it via ON DELETE CASCADE). Reports stay for up to
+    // 12 months (see Datenschutz), keyed only by the now orphaned id.
+    try {
+      const { auth } = await import("@/lib/auth/server");
+      const { getRequest } = await import("@tanstack/react-start/server");
+      const headers = new Headers(getRequest()?.headers);
+      const bearer = (context as { bearerToken?: string }).bearerToken;
+      if (bearer) headers.set("Authorization", `Bearer ${bearer}`);
+      await auth.api.signOut({ headers });
+    } catch {
+      /* no session to end (e.g. auth off) — the row deletes below still apply */
+    }
+    await sql`delete from "session" where "userId" = ${id}`;
+    await sql`delete from "account" where "userId" = ${id}`;
+    await sql`delete from "user" where id = ${id}`;
+    return emptySnapshot();
   });
 
 /** Max decoded size of an ID image (after client-side re-encode to JPEG). */

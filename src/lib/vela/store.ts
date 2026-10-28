@@ -150,6 +150,10 @@ export const useVela = create<VelaStore>((set, get) => ({
   removeProfile: async () => {
     const snapshot = await deleteProfile();
     set(apply(snapshot, { celebrate: null, toast: null, frontId: null }));
+    // The login is gone too (DSGVO Art. 17): drop the local session and start over.
+    const { forgetLocalSession } = await import("@/lib/auth/client");
+    forgetLocalSession();
+    if (typeof window !== "undefined") window.location.href = "/";
   },
   dismissCelebrate: () => set({ celebrate: null }),
   clearToast: () => set({ toast: null }),

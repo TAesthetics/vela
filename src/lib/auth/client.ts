@@ -341,6 +341,15 @@ export async function resumePendingSignIn(): Promise<boolean> {
 }
 
 /**
+ * Forget the local session after the server already deleted the account
+ * (no sign-out request: the session no longer exists server-side).
+ */
+export function forgetLocalSession(): void {
+  setBearerToken(null);
+  authClient.$store.notify("$sessionSignal");
+}
+
+/**
  * Sign out of THIS app's local session, clear the preview token, then redirect.
  *
  * Use this, never `authClient.signOut()` — see the note on `authClient`.

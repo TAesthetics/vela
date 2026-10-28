@@ -46,3 +46,48 @@ export async function purgeOldIdImages(sql: Sql) {
     where image is not null and created_at < now() - interval '30 days'
   `;
 }
+
+/**
+ * Keyed hash of a login identity (provider + account id). Lets an open age
+ * suspension survive full account deletion without keeping who it was.
+ */
+async function identityHashes(sql: Sql, userId: string): Promise<string[]> {
+  const { createHmac } = await import("node:crypto");
+  const key = process.env.BETTER_AUTH_SECRET?.trim() || "vela-identity";
+  const rows = await sql<{ providerId: string; accountId: string }>`
+    select "providerId", "accountId" from "account" where "userId" = ${userId}
+  `;
+  return rows.map((row) =>
+    createHmac("sha256", key).update(`${row.providerId}:${row.accountId}`).digest("hex"),
+  );
+}
+
+/** Before deleting an account with an open age suspension: remember the identity. */
+export async function rememberSuspendedIdentity(sql: Sql, userId: string) {
+  for (const hash of await identityHashes(sql, userId)) {
+    await sql`
+      insert into vela_deleted_identities (identity_hash, reason)
+      values (${hash}, 'age_suspension')
+      on conflict (identity_hash) do update set created_at = now()
+    `;
+  }
+}
+
+/**
+ * On a new profile: if this login identity was deleted while suspended (within
+ * 12 months), carry the suspension over to the new user id.
+ */
+export async function carryOverSuspension(sql: Sql, userId: string): Promise<boolean> {
+  const hashes = await identityHashes(sql, userId);
+  let carried = false;
+  for (const hash of hashes) {
+    const hit = await sql`
+      delete from vela_deleted_identities
+      where identity_hash = ${hash} and created_at > now() - interval '12 months'
+      returning identity_hash
+    `;
+    if (hit.length > 0) carried = true;
+  }
+  if (carried) await recordFlag(sql, userId, "operator", "suspended", ["Sperre nach Löschen und Neuanmeldung übernommen"]);
+  return carried;
+}
