@@ -27,6 +27,8 @@ export type Person = {
 export type Message = {
   id: string;
   from: "me" | "them";
+  /** "note" = the line sent with a spark; it never counts toward the veil. */
+  kind: "note" | "message";
   text: string;
   at: number;
 };
@@ -35,12 +37,17 @@ export type Thread = {
   person: Person;
   photo: string | null;
   unveiled: boolean;
+  /** Chat messages (notes excluded) each side has sent in this match. */
+  mineCount: number;
+  theirCount: number;
   messages: Message[];
 };
 
 export type Snapshot = {
   me: Me | null;
   plus: boolean;
+  /** False until a real checkout exists outside the workspace preview. */
+  plusAvailable: boolean;
   swipesLeft: number | null;
   lastPassId: string | null;
   others: number;
@@ -51,7 +58,13 @@ export type Snapshot = {
 };
 
 export const FREE_SWIPES = 12;
+/** Each matched person must send this many chat messages before photos show. */
 export const VEIL_AFTER = 3;
+
+/** Both sides have written enough — the only rule that lifts the veil. */
+export function isUnveiled(mineCount: number, theirCount: number) {
+  return mineCount >= VEIL_AFTER && theirCount >= VEIL_AFTER;
+}
 
 export const VALUES = [
   "Neugier",
@@ -133,6 +146,7 @@ export function emptySnapshot(): Snapshot {
   return {
     me: null,
     plus: false,
+    plusAvailable: false,
     swipesLeft: FREE_SWIPES,
     lastPassId: null,
     others: 0,

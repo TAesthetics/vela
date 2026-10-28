@@ -6,7 +6,7 @@ import {
   ORBITS,
   PROMPT_BANK,
   VALUES,
-  VEIL_AFTER,
+  isUnveiled,
   type Me,
   type Message,
   type Orbit,
@@ -108,6 +108,12 @@ function stamp(value: unknown) {
   return Number.isFinite(at) ? at : Date.now();
 }
 
+async function plusAvailable() {
+  // Server-only import, kept out of the client bundle.
+  const { isWorkspacePreview } = await import("@/lib/env.server");
+  return isWorkspacePreview();
+}
+
 async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
   const day = berlinDay();
   const mine = await sql<ProfileRow>`
@@ -162,9 +168,10 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
     pair_b: string;
     from_user: string;
     body: string;
+    kind: string;
     created_at: unknown;
   }>`
-    select id, pair_a, pair_b, from_user, body, created_at
+    select id, pair_a, pair_b, from_user, body, kind, created_at
     from vela_messages
     where pair_a = ${userId} or pair_b = ${userId}
     order by created_at asc
@@ -176,16 +183,24 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
       .filter((message) => message.pair_a === pairA && message.pair_b === pairB)
       .map((message) => ({
         id: message.id,
-        from: message.from_user === userId ? "me" : "them",
+        from: message.from_user === userId ? ("me" as const) : ("them" as const),
+        kind: message.kind === "note" ? ("note" as const) : ("message" as const),
         text: message.body,
         at: stamp(message.created_at),
       }));
-    const mineCount = messages.filter((message) => message.from === "me").length;
-    const unveiled = mineCount >= VEIL_AFTER;
+    // The veil lifts only when BOTH people have each written VEIL_AFTER chat
+    // messages in this match. Spark notes never count. Enforced here, server-side:
+    // the photo is not sent to the client until then.
+    const chat = messages.filter((message) => message.kind === "message");
+    const mineCount = chat.filter((message) => message.from === "me").length;
+    const theirCount = chat.filter((message) => message.from === "them").length;
+    const unveiled = isUnveiled(mineCount, theirCount);
     return {
       person: toPerson(row, true),
       photo: unveiled ? row.photo : null,
       unveiled,
+      mineCount,
+      theirCount,
       messages,
     };
   });
@@ -193,6 +208,7 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
   return {
     me: meRow ? toMe(meRow) : null,
     plus,
+    plusAvailable: await plusAvailable(),
     swipesLeft: plus ? null : Math.max(0, FREE_SWIPES - used),
     lastPassId: lastRows[0]?.to_user ?? null,
     others: Number(otherRows[0]?.n ?? 0),
@@ -350,8 +366,8 @@ export const swipe = createServerFn({ method: "POST" })
     if (direction === "spark" && note) {
       const [pairA, pairB] = pairOf(context.userId, toUser);
       await sql`
-        insert into vela_messages (id, pair_a, pair_b, from_user, body)
-        values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${note})
+        insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
+        values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${note}, 'note')
       `;
     }
     let status: "match" | "sent" | "ok" = direction === "pass" ? "ok" : "sent";
@@ -400,6 +416,9 @@ export const sendMessage = createServerFn({ method: "POST" })
     if (!toUser || !text || toUser === context.userId) {
       return { error: "Leer.", snapshot: await snapshot(sql, context.userId) };
     }
+    if (text.replace(/\s/g, "").length < 2) {
+      return { error: "Ein bisschen mehr, bitte.", snapshot: await snapshot(sql, context.userId) };
+    }
     const mutual = await sql`
       select 1 from vela_swipes mine
       join vela_swipes theirs
@@ -415,8 +434,8 @@ export const sendMessage = createServerFn({ method: "POST" })
     }
     const [pairA, pairB] = pairOf(context.userId, toUser);
     await sql`
-      insert into vela_messages (id, pair_a, pair_b, from_user, body)
-      values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${text})
+      insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
+      values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${text}, 'message')
     `;
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
@@ -425,8 +444,12 @@ export const setPlus = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
+    // No checkout yet: Plus can only be switched on in the workspace preview.
+    if (!(await plusAvailable())) {
+      return { error: "Plus kommt bald.", snapshot: await snapshot(sql, context.userId) };
+    }
     await sql`update vela_profiles set plus = true where user_id = ${context.userId}`;
-    return snapshot(sql, context.userId);
+    return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
 export const deleteProfile = createServerFn({ method: "POST" })

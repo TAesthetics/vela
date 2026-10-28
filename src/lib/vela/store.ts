@@ -8,6 +8,7 @@ type VelaStore = {
   ready: boolean;
   me: Me | null;
   plus: boolean;
+  plusAvailable: boolean;
   swipesLeft: number | null;
   lastPassId: string | null;
   others: number;
@@ -54,6 +55,7 @@ function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
   return {
     me: snapshot.me,
     plus: snapshot.plus,
+    plusAvailable: snapshot.plusAvailable,
     swipesLeft: snapshot.swipesLeft,
     lastPassId: snapshot.lastPassId,
     others: snapshot.others,
@@ -117,8 +119,9 @@ export const useVela = create<VelaStore>((set, get) => ({
     set(apply(result.snapshot, { toast: result.error }));
   },
   unlockPlus: async () => {
-    const snapshot = await setPlus();
-    set(apply(snapshot, { toast: snapshot.plus ? "Vela+ ist an." : "Leg zuerst dein Profil an." }));
+    const result = await setPlus();
+    const toast = result.error ?? (result.snapshot.plus ? "Vela+ ist an." : "Leg zuerst dein Profil an.");
+    set(apply(result.snapshot, { toast }));
   },
   removeProfile: async () => {
     const snapshot = await deleteProfile();

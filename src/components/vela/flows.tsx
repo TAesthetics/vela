@@ -3,6 +3,7 @@ import { ArrowLeft, Compass, Eye, Flame, MessageCircle, Smartphone, Undo2, UserR
 import {
   ICEBREAKERS,
   ORBITS,
+  VEIL_AFTER,
   VALUES,
   formatTime,
   orbitLabel,
@@ -122,8 +123,10 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
   const [sending, setSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const messages = thread?.messages ?? [];
-  const mine = messages.filter((message) => message.from === "me").length;
-  const need = Math.max(0, 3 - mine);
+  // Counts come from the server (spark notes excluded) — same rule that lifts the veil.
+  const mine = thread?.mineCount ?? 0;
+  const theirs = thread?.theirCount ?? 0;
+  const need = Math.max(0, VEIL_AFTER - mine);
 
   useEffect(() => {
     markSeen(id);
@@ -191,12 +194,17 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
       </div>
       {!thread.unveiled && (
         <p className="px-4 pb-2 text-center text-xs text-muted">
-          {need === 0
-            ? "Der Schleier fällt gleich."
-            : `Noch ${need} ${need === 1 ? "Nachricht" : "Nachrichten"} von dir, dann fällt der Schleier.`}
+          <span className="tabular-nums">
+            Du {Math.min(mine, VEIL_AFTER)}/{VEIL_AFTER} · {thread.person.name} {Math.min(theirs, VEIL_AFTER)}/
+            {VEIL_AFTER}
+          </span>
+          <br />
+          {need > 0
+            ? `Noch ${need} ${need === 1 ? "Nachricht" : "Nachrichten"} von dir. Der Schleier fällt, wenn ihr beide ${VEIL_AFTER} geschrieben habt.`
+            : `Jetzt ist ${thread.person.name} dran. Der Schleier fällt, wenn ihr beide ${VEIL_AFTER} geschrieben habt.`}
         </p>
       )}
-      {mine < 3 && (
+      {mine < VEIL_AFTER && (
         <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2">
           {ICEBREAKERS.map((line) => (
             <button
@@ -455,6 +463,7 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
 export function Plus({ onBack }: { onBack: () => void }) {
   const plus = useVela((state) => state.plus);
   const unlockPlus = useVela((state) => state.unlockPlus);
+  const plusAvailable = useVela((state) => state.plusAvailable);
   const features = [
     { icon: Eye, title: "Wer schon wartet", line: "Sieh die Menschen, die im Stillen zurückfunken würden." },
     { icon: Flame, title: "Unbegrenzte Swipes", line: "Kostenlos 12 am Tag, links oder rechts. Vela+ hört nicht auf." },
@@ -489,12 +498,18 @@ export function Plus({ onBack }: { onBack: () => void }) {
         <p className="mt-6 font-display text-4xl text-paper tabular-nums">
           12,90 € <span className="font-sans text-base text-muted">/ Monat</span>
         </p>
-        <p className="mt-2 text-sm text-muted">Jederzeit kündbar. In dieser Vorschau ohne Abbuchung.</p>
+        <p className="mt-2 text-sm text-muted">
+          {plusAvailable ? "Jederzeit kündbar. In dieser Vorschau ohne Abbuchung." : "Jederzeit kündbar."}
+        </p>
         <div className="mt-6">
           {plus ? (
             <p className="rounded-full bg-surface py-3 text-center text-sm text-paper">Vela+ ist aktiv</p>
-          ) : (
+          ) : plusAvailable ? (
             <PrimaryButton onClick={() => void unlockPlus()}>In der Vorschau freischalten</PrimaryButton>
+          ) : (
+            <p className="rounded-full bg-surface py-3 text-center text-sm text-muted">
+              Plus kommt bald. Bezahlen geht noch nicht.
+            </p>
           )}
         </div>
         <div className="mt-8 rounded-3xl border border-line p-4">
