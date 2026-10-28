@@ -30,30 +30,28 @@ Kaltstart leer ist, also nur zum Testen.
 | `DATABASE_URL` | kommt von Neon (Schritt 2) |
 | `BETTER_AUTH_SECRET` | zufällig, mind. 32 Zeichen (`openssl rand -hex 32`). Nie ändern |
 | `BETTER_AUTH_URL` | Produktions-Adresse ohne `/` am Ende, z. B. `https://vela-xxxx.vercel.app` |
-| `VELA_SELF_HOSTED` | `1` (eigenes Google/X-Login statt des Grok-Anmeldedienstes) |
-| `VITE_AUTH_PROVIDERS` | `google` (oder `google,x`, wenn X eingerichtet ist) |
-| `ADMIN_EMAILS` | deine Google-E-Mail(s), durch Komma getrennt |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | aus Schritt 4 |
-| `X_CLIENT_ID` / `X_CLIENT_SECRET` | optional |
+| `VELA_SELF_HOSTED` | `1` (Anmeldung mit E-Mail + Passwort statt des Grok-Anmeldedienstes) |
+| `ADMIN_EMAILS` | deine E-Mail(s), durch Komma getrennt |
+
+`VITE_AUTH_PROVIDERS`, `GOOGLE_*` und `X_*` werden nicht mehr gebraucht (schaden aber nicht).
 
 Nicht setzen: `NITRO_PRESET` (nur für Railway).
 Nach jeder Änderung: **Deployments → … → Redeploy**.
 
-## 4. Google-Login
+## 4. Anmeldung
 
-1. <https://console.cloud.google.com/apis/credentials> → **Create Credentials → OAuth client ID**
-   (vorher ggf. „OAuth consent screen“ ausfüllen: App-Name VELA, deine E-Mail, Status „In production“).
-2. Typ **Web application**.
-3. Authorized redirect URI:
-   `https://<deine-domain>/api/auth/oauth2/callback/grok-google`
-4. Client-ID und Secret als `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` eintragen, neu deployen.
+E-Mail + Passwort (Better Auth, Passwort mind. 8 Zeichen, nur als Hash gespeichert).
+Kein Google, kein X, kein Mail-Dienst: keine Bestätigungs- und keine Reset-Mails.
+Passwort vergessen → Mail an den Betreiber.
 
-X (optional): Redirect-URI `https://<deine-domain>/api/auth/oauth2/callback/grok-x`.
+**Wichtig:** Registriere dich nach dem ersten Deploy sofort selbst mit der Adresse aus
+`ADMIN_EMAILS`. E-Mails werden nicht bestätigt, also bekommt Admin-Rechte, wer die
+Adresse zuerst registriert.
 
 ## 5. Prüfen
 
 - `https://<deine-domain>/healthz` → `ok` (Datenbank erreichbar).
-- Startseite öffnen, „Weiter mit Google“, Profil anlegen.
+- Startseite öffnen, „Registrieren“, Profil anlegen.
 - `/admin` mit der Adresse aus `ADMIN_EMAILS`.
 
 ## Hinweise

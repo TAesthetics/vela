@@ -18,12 +18,13 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="2. Anmeldung mit Google oder X">
+      <Section title="2. Anmeldung mit E-Mail und Passwort">
         <p>
-          Du meldest dich über „Weiter mit Google“ oder „Weiter mit X“ an. Dafür leiten wir dich direkt zu
-          Google bzw. X weiter (OAuth). Dabei erhalten wir eine Nutzerkennung, deinen Namen und deine E-Mail-Adresse
-          (bei X ggf. eine Ersatzadresse). Passwörter für Google oder X sehen wir nie. Für die Anmeldung
-          gelten zusätzlich die Datenschutzbestimmungen von Google bzw. X.
+          Du registrierst dich mit deiner E-Mail-Adresse und einem Passwort und bestätigst, dass du mindestens 18
+          Jahre alt bist. Wir speichern deine E-Mail-Adresse, eine Nutzerkennung und dein Passwort nur als
+          nicht umkehrbaren Hash (wir kennen dein Passwort nie). Es gibt keine Anmeldung über Google, X oder
+          andere Dritte, und wir schicken keine Werbe- oder Bestätigungsmails. Passwort vergessen? Schreib uns
+          an {OPERATOR.email}.
         </p>
         <p>
           Rechtsgrundlage: Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO). Nach der Anmeldung setzen
@@ -107,8 +108,7 @@ function Datenschutz() {
         <p>
           Die App wird bei Vercel Inc. (USA) gehostet; die Datenbank liegt bei {OPERATOR.database}.
           Diese Anbieter verarbeiten Daten in unserem Auftrag (Art. 28 DSGVO). Bei Übermittlungen in die
-          USA stützen wir uns auf das EU-US Data Privacy Framework bzw. Standardvertragsklauseln. Für die
-          Anmeldung werden Daten an Google bzw. X übermittelt (siehe Punkt 2). Eine Weitergabe an
+          USA stützen wir uns auf das EU-US Data Privacy Framework bzw. Standardvertragsklauseln. Eine Weitergabe an
           sonstige Dritte oder ein Verkauf deiner Daten findet nicht statt.
         </p>
       </Section>
@@ -118,7 +118,7 @@ function Datenschutz() {
           Profil, Swipes, Matches und Nachrichten speichern wir, solange dein Konto besteht. Löschst du dein
           Konto (Ich → „Konto löschen“), löschen wir sofort und vollständig (Art. 17 DSGVO): Profil, Foto, Swipes,
           Blockierungen, alle Nachrichten, an denen du beteiligt warst, sowie dein Login (Benutzerkonto,
-          verknüpfte Google- bzw. X-Anmeldung und alle Sitzungen). Meldungen bewahren wir zum Schutz anderer bis
+          E-Mail-Adresse, Passwort-Hash und alle Sitzungen). Meldungen bewahren wir zum Schutz anderer bis
           zu 12 Monate auf; danach werden sie automatisch gelöscht. Ausweisbilder löschen wir nach der
           Entscheidung, spätestens nach 30 Tagen. Das Prüfprotokoll der Altersprüfung und das Ergebnis einer
           Ausweisprüfung bewahren wir auf, solange eine Sperre besteht, und danach bis zu 12 Monate. Löschst du
