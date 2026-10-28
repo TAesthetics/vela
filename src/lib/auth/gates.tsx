@@ -64,6 +64,14 @@ export function SignInGate({
 }
 
 export function SignInButtons() {
+  // Self-hosted VELA: e-mail + password lives on the login page.
+  if (GROK_PROVIDERS.length === 0) {
+    return (
+      <a href={SIGN_IN_PATH} className="underline">
+        Anmelden
+      </a>
+    );
+  }
   return (
     <div className="flex w-full max-w-sm flex-col gap-2">
       {GROK_PROVIDERS.map((p) => (

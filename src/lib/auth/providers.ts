@@ -40,6 +40,16 @@ const wanted = String(import.meta.env?.VITE_AUTH_PROVIDERS ?? "")
   .map((item) => item.trim().toLowerCase())
   .filter(Boolean);
 
-export const GROK_PROVIDERS: readonly GrokProvider[] = wanted.length
+/**
+ * Self-hosted VELA (own Vercel project / Railway) has no broker: sign-in is
+ * e-mail + password only, so no provider buttons at all (whatever
+ * VITE_AUTH_PROVIDERS says). Baked in at build time by `vite.config.ts`.
+ */
+const selfHostedBuild =
+  typeof import.meta.env !== "undefined" && import.meta.env.VITE_VELA_SELF_HOSTED === "1";
+
+export const GROK_PROVIDERS: readonly GrokProvider[] = selfHostedBuild
+  ? []
+  : wanted.length
   ? ALL_PROVIDERS.filter((p) => wanted.includes(p.providerId.replace(/^grok-/, "")))
   : ALL_PROVIDERS;

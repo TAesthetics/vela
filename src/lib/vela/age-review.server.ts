@@ -87,17 +87,36 @@ export async function purgeExpired(sql: Sql) {
 }
 
 /**
- * Keyed hash of a login identity (provider + account id). Lets an open age
+ * Normalized e-mail for the suspension check: lower-case, "+tag" dropped, so
+ * "Name+x@Mail.com" and "name@mail.com" count as the same person.
+ */
+function normalizeEmail(email: string): string {
+  const [local = "", domain = ""] = email.trim().toLowerCase().split("@");
+  return `${local.split("+")[0]}@${domain}`;
+}
+
+/**
+ * Keyed hashes of a login identity. OAuth: provider + account id. E-mail +
+ * password ("credential", whose account id is just the user id): the
+ * normalized e-mail, so re-registering with the same address after deleting
+ * a suspended account does not dodge the suspension. Lets an open age
  * suspension survive full account deletion without keeping who it was.
  */
 async function identityHashes(sql: Sql, userId: string): Promise<string[]> {
   const { createHmac } = await import("node:crypto");
   const key = process.env.BETTER_AUTH_SECRET?.trim() || "vela-identity";
-  const rows = await sql<{ providerId: string; accountId: string }>`
-    select "providerId", "accountId" from "account" where "userId" = ${userId}
+  const rows = await sql<{ providerId: string; accountId: string; email: string | null }>`
+    select a."providerId", a."accountId", u.email
+    from "account" a left join "user" u on u.id = a."userId"
+    where a."userId" = ${userId}
   `;
-  return rows.map((row) =>
-    createHmac("sha256", key).update(`${row.providerId}:${row.accountId}`).digest("hex"),
+  const identities = rows.map((row) =>
+    row.providerId === "credential"
+      ? `email:${normalizeEmail(row.email ?? row.accountId)}`
+      : `${row.providerId}:${row.accountId}`,
+  );
+  return [...new Set(identities)].map((identity) =>
+    createHmac("sha256", key).update(identity).digest("hex"),
   );
 }
 
