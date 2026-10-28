@@ -7,6 +7,6 @@ export const OPERATOR = {
   address: "Scherzhauserfeldstraße 40, 5020 Salzburg, Österreich",
   email: "terence.nwaeke@gmail.com",
   purpose: "Betrieb der Dating-App Vela",
-  database: "Neon (serverloses PostgreSQL); Serverstandort abhängig vom Hosting",
+  database: "Neon Inc. (USA), serverloses PostgreSQL",
   updated: "28. Oktober 2026",
 };

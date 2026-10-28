@@ -20,11 +20,10 @@ function Datenschutz() {
 
       <Section title="2. Anmeldung mit Google oder X">
         <p>
-          Du meldest dich über „Weiter mit Google“ oder „Weiter mit X“ an. Die Anmeldung läuft über den
-          Anmeldedienst der Grok-Plattform (auth.grok.me, betrieben von xAI), der dich an Google bzw. X
-          weiterleitet. Dabei erhalten wir eine Nutzerkennung, deinen Namen und deine E-Mail-Adresse
+          Du meldest dich über „Weiter mit Google“ oder „Weiter mit X“ an. Dafür leiten wir dich direkt zu
+          Google bzw. X weiter (OAuth). Dabei erhalten wir eine Nutzerkennung, deinen Namen und deine E-Mail-Adresse
           (bei X ggf. eine Ersatzadresse). Passwörter für Google oder X sehen wir nie. Für die Anmeldung
-          gelten zusätzlich die Datenschutzbestimmungen von Google, X und xAI.
+          gelten zusätzlich die Datenschutzbestimmungen von Google bzw. X.
         </p>
         <p>
           Rechtsgrundlage: Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO). Nach der Anmeldung setzen
@@ -109,7 +108,7 @@ function Datenschutz() {
           Die App wird bei Vercel Inc. (USA) gehostet; die Datenbank liegt bei {OPERATOR.database}.
           Diese Anbieter verarbeiten Daten in unserem Auftrag (Art. 28 DSGVO). Bei Übermittlungen in die
           USA stützen wir uns auf das EU-US Data Privacy Framework bzw. Standardvertragsklauseln. Für die
-          Anmeldung werden Daten an xAI, Google bzw. X übermittelt (siehe Punkt 2). Eine Weitergabe an
+          Anmeldung werden Daten an Google bzw. X übermittelt (siehe Punkt 2). Eine Weitergabe an
           sonstige Dritte oder ein Verkauf deiner Daten findet nicht statt.
         </p>
       </Section>
