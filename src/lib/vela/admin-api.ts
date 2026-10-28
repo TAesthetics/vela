@@ -42,7 +42,6 @@ export type AdminFlag = {
   userId: string;
   name: string | null;
   source: string;
-  likelihood: number | null;
   signals: string[];
   action: string;
   createdAt: string;
@@ -63,7 +62,7 @@ function iso(value: unknown) {
 }
 
 async function load(sql: Sql): Promise<AdminData> {
-  const { purgeOldIdImages } = await import("@/lib/vela/age-check.server");
+  const { purgeOldIdImages } = await import("@/lib/vela/age-review.server");
   await purgeOldIdImages(sql);
   const checks = await sql<{ id: string; user_id: string; name: string | null; age: number | null; created_at: unknown; image: string | null }>`
     select c.id, c.user_id, p.name, p.age, c.created_at, c.image
@@ -71,8 +70,8 @@ async function load(sql: Sql): Promise<AdminData> {
     where c.status = 'pending'
     order by c.created_at asc
   `;
-  const flagRows = await sql<{ id: string; user_id: string; name: string | null; source: string; minor_likelihood: number | null; signals: unknown; action: string; created_at: unknown }>`
-    select f.id, f.user_id, p.name, f.source, f.minor_likelihood, f.signals, f.action, f.created_at
+  const flagRows = await sql<{ id: string; user_id: string; name: string | null; source: string; signals: unknown; action: string; created_at: unknown }>`
+    select f.id, f.user_id, p.name, f.source, f.signals, f.action, f.created_at
     from vela_age_flags f left join vela_profiles p on p.user_id = f.user_id
     order by f.created_at desc
     limit 50
@@ -109,7 +108,6 @@ async function load(sql: Sql): Promise<AdminData> {
       userId: row.user_id,
       name: row.name,
       source: row.source,
-      likelihood: row.minor_likelihood === null ? null : Number(row.minor_likelihood),
       signals: signalsOf(row.signals),
       action: row.action,
       createdAt: iso(row.created_at),
@@ -160,9 +158,9 @@ export const resolveReport = createServerFn({ method: "POST" })
     `;
     const userId = rows[0]?.to_user;
     if (userId && data?.suspend === true) {
-      const age = await import("@/lib/vela/age-check.server");
+      const age = await import("@/lib/vela/age-review.server");
       await age.suspendForAge(sql, userId);
-      await age.recordFlag(sql, userId, "operator", "suspended", null, ["Vom Betreiber gesperrt (Alter)"]);
+      await age.recordFlag(sql, userId, "operator", "suspended", ["Vom Betreiber gesperrt (Alter)"]);
     }
     return load(sql);
   });

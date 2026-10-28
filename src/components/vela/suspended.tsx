@@ -75,8 +75,8 @@ export function Suspended({ suspension }: { suspension: Suspension }) {
       <ShieldAlert className="mt-8 size-8 text-ember" />
       <h1 className="mt-4 font-display text-3xl leading-tight text-paper">Dein Konto ist vorübergehend gesperrt.</h1>
       <p className="mt-4 text-base text-muted">
-        Vela ist nur für Erwachsene. Eine automatische Prüfung deiner Texte oder eine Meldung deutet darauf hin, dass
-        du jünger als 18 sein könntest. Solange die Sperre besteht, sieht dich niemand und du kannst nicht swipen oder
+        Vela ist nur für Erwachsene. Nach einer Meldung hat der Betreiber den Verdacht, dass du jünger als 18 sein
+        könntest. Solange die Sperre besteht, sieht dich niemand und du kannst nicht swipen oder
         schreiben.
       </p>
       <p className="mt-3 text-base text-muted">

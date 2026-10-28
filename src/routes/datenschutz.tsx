@@ -65,25 +65,19 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="6. KI-gestützte Altersprüfung">
+      <Section title="6. Altersprüfung nach Meldungen">
         <p>
-          Vela ist nur für Erwachsene. Zum Schutz Minderjähriger prüft ein KI-Sprachmodell automatisch Texte, die
-          du selbst schreibst: deine Profilantworten beim Speichern, stichprobenartig deine Chatnachrichten und
-          deine Texte, wenn dich jemand als „Minderjährig“ meldet. Das Modell schätzt nur, wie wahrscheinlich es
-          ist, dass du jünger als 18 bist, und nennt kurze Gründe. Fotos und Ausweise werden nie an die KI
-          geschickt.
+          Vela ist nur für Erwachsene. Es gibt keine automatische Prüfung und keine KI. Wenn dich jemand als
+          „Minderjährig“ meldet, prüft der Betreiber die Meldung selbst. Besteht nach dieser menschlichen Prüfung der
+          Verdacht, dass du jünger als 18 bist, sperren wir dein Konto vorübergehend: Du bist dann für niemanden
+          sichtbar und kannst nicht swipen oder schreiben.
         </p>
         <p>
-          Liegt die Schätzung über einem festgelegten Schwellenwert, wird dein Konto automatisch gesperrt. Das ist
-          eine automatisierte Entscheidung im Sinne von Art. 22 DSGVO. Sie ist zum Schutz Minderjähriger und zur
-          Durchführung des Nutzungsvertrags (nur ab 18) erforderlich (Art. 22 Abs. 2 lit. a DSGVO). Du hast das
-          Recht auf Überprüfung durch einen Menschen, auf Darlegung deines Standpunkts und auf Anfechtung der
-          Entscheidung: Lade dazu einen Ausweis hoch (Punkt 7) oder schreib an {OPERATOR.email}.
-        </p>
-        <p>
-          Rechtsgrundlage: berechtigtes Interesse am Schutz Minderjähriger und an einer Plattform nur für
-          Erwachsene (Art. 6 Abs. 1 lit. f DSGVO) sowie Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO). Das
-          Ergebnis (Wahrscheinlichkeit, Gründe, Modell, Zeitpunkt, Maßnahme) speichern wir als Prüfprotokoll.
+          Gegen eine Sperre kannst du dich wehren, indem du einen Ausweis hochlädst (Punkt 7) oder an{" "}
+          {OPERATOR.email} schreibst. Rechtsgrundlage: berechtigtes Interesse am Schutz Minderjähriger und an einer
+          Plattform nur für Erwachsene (Art. 6 Abs. 1 lit. f DSGVO) sowie Vertragserfüllung (Art. 6 Abs. 1 lit. b
+          DSGVO). Meldungen und Entscheidungen des Betreibers (Zeitpunkt, Grund, Maßnahme) speichern wir als
+          Prüfprotokoll.
         </p>
       </Section>
 
@@ -115,9 +109,7 @@ function Datenschutz() {
           Die App wird bei Vercel Inc. (USA) gehostet; die Datenbank liegt bei {OPERATOR.database}.
           Diese Anbieter verarbeiten Daten in unserem Auftrag (Art. 28 DSGVO). Bei Übermittlungen in die
           USA stützen wir uns auf das EU-US Data Privacy Framework bzw. Standardvertragsklauseln. Für die
-          Anmeldung werden Daten an xAI, Google bzw. X übermittelt (siehe Punkt 2). Für die Altersprüfung
-          (Punkt 6) senden wir ausschließlich Texte an den KI-Anbieter xAI (X.AI LLC, USA) als
-          Auftragsverarbeiter; die Texte werden nur für diese Prüfung verwendet. Eine Weitergabe an
+          Anmeldung werden Daten an xAI, Google bzw. X übermittelt (siehe Punkt 2). Eine Weitergabe an
           sonstige Dritte oder ein Verkauf deiner Daten findet nicht statt.
         </p>
       </Section>
@@ -140,8 +132,7 @@ function Datenschutz() {
         <p>
           Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17),
           Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch
-          (Art. 21 DSGVO) sowie das Recht, nicht ausschließlich einer automatisierten Entscheidung unterworfen
-          zu werden (Art. 22 DSGVO, siehe Punkt 6). Eine erteilte Einwilligung kannst du jederzeit mit Wirkung für die Zukunft
+          (Art. 21 DSGVO). Eine erteilte Einwilligung kannst du jederzeit mit Wirkung für die Zukunft
           widerrufen. Schreib dazu an {OPERATOR.email}.
         </p>
         <p>

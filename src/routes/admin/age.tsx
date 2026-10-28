@@ -131,7 +131,7 @@ function AdminAge() {
         {data.flags.map((flag) => (
           <li key={flag.id} className="rounded-xl bg-surface p-3">
             {flag.name ?? flag.userId} · {flag.source} · {flag.action}
-            {flag.likelihood !== null && ` · ${Math.round(flag.likelihood * 100)} %`} · {when(flag.createdAt)}
+            {" · "}{when(flag.createdAt)}
             {flag.signals.length > 0 && <span className="block text-xs text-muted">{flag.signals.join(" · ")}</span>}
           </li>
         ))}

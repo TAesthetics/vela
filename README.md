@@ -8,12 +8,12 @@ VELA ist eine Open-Source-Dating-App gegen oberflächliches Swipen. Profilbilder
 
 - **Der Schleier:** Kein Urteil nach einem einzigen Foto. Bilder lösen sich erst nach einem echten Gespräch auf.
 - **Open Source:** Der gesamte Code ist offen. Jede und jeder kann nachvollziehen, wie Matching und Datenschutz funktionieren, und mitbauen.
-- **KI mit Sinn:** Smarte Match-Vorschläge und Hilfe beim ersten Satz, ohne dich in Endlos-Swipes zu halten.
+- **Ohne KI:** Keine Algorithmen, die dich bewerten. Menschen lesen Sätze, nicht Scores.
 - **Datenschutz zuerst:** Transparent statt Blackbox.
 
 ## Status
 
-🚧 VELA befindet sich in aktiver Entwicklung. Der App-Code folgt in Kürze.
+🚧 VELA befindet sich in aktiver Entwicklung. Der App-Code liegt in diesem Repository.
 
 ## Mitmachen
 

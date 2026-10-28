@@ -129,9 +129,9 @@ async function plusAvailable() {
   return isWorkspacePreview();
 }
 
-function ageCheck() {
+function ageReview() {
   // Server-only module, loaded lazily so it never reaches the client bundle.
-  return import("@/lib/vela/age-check.server");
+  return import("@/lib/vela/age-review.server");
 }
 
 /** The person's own profile status ('active' when there is no profile yet). */
@@ -147,7 +147,7 @@ async function canInteract(sql: Sql, me: string, other: string) {
   return !(await isBlocked(sql, me, other));
 }
 
-/** True once the operator approved an ID for this person (AI checks stop). */
+/** True once the operator approved an ID for this person. */
 async function ageVerified(sql: Sql, userId: string) {
   const rows = await sql`
     select 1 from vela_id_checks where user_id = ${userId} and status = 'approved' limit 1
@@ -372,7 +372,7 @@ export const loadVela = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const sql = await getSql();
     // Opportunistic retention: ID images never outlive 30 days.
-    await (await ageCheck()).purgeOldIdImages(sql);
+    await (await ageReview()).purgeOldIdImages(sql);
     return snapshot(sql, context.userId);
   });
 
@@ -410,9 +410,6 @@ export const saveProfile = createServerFn({ method: "POST" })
         suspended ? "suspended_age" : "active",
       ],
     );
-    if (!suspended && !(await ageVerified(sql, context.userId))) {
-      await (await ageCheck()).runAgeCheck(sql, context.userId, "profile");
-    }
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
@@ -548,14 +545,6 @@ export const sendMessage = createServerFn({ method: "POST" })
       insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
       values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${text}, 'message')
     `;
-    // Sampled AI age check on the sender's own messages: 1st, 5th, then every 20th.
-    const sentRows = await sql<{ n: number }>`
-      select count(*) as n from vela_messages where from_user = ${context.userId} and kind = 'message'
-    `;
-    const sent = Number(sentRows[0]?.n ?? 0);
-    if ((sent === 1 || sent === 5 || sent % 20 === 0) && !(await ageVerified(sql, context.userId))) {
-      await (await ageCheck()).runAgeCheck(sql, context.userId, "message");
-    }
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
@@ -612,10 +601,8 @@ export const reportUser = createServerFn({ method: "POST" })
     // Reporting always blocks, so the reporter never sees this person again.
     await insertBlock(sql, context.userId, toUser);
     if (reason === "minor" && !(await ageVerified(sql, toUser))) {
-      // Always queue for human review; the AI may additionally suspend right away.
-      const age = await ageCheck();
-      const suspended = await age.runAgeCheck(sql, toUser, "report");
-      if (!suspended) await age.recordFlag(sql, toUser, "report", "review", null, ["Gemeldet: Minderjährig"]);
+      // No automatic action: the operator reviews it on /admin/age.
+      await (await ageReview()).recordFlag(sql, toUser, "report", "review", ["Gemeldet: Minderjährig"]);
     }
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
