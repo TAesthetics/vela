@@ -105,6 +105,7 @@ export const useVela = create<VelaStore>((set, get) => ({
   spark: async (personId, promptId, note) => {
     const result = await swipe({ data: { toUser: personId, direction: "spark", promptId, note } });
     const person = result.snapshot.threads.find((thread) => thread.person.id === personId)?.person;
+    if (result.status === "match") void import("@/lib/native").then(({ nativeHaptic }) => nativeHaptic("match"));
     set(
       apply(result.snapshot, {
         frontId: null,
