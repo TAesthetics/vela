@@ -58,6 +58,19 @@ export type Snapshot = {
 };
 
 export const FREE_SWIPES = 12;
+
+/** Report reasons (stored id → German label). */
+export const REPORT_REASONS = [
+  { id: "fake", label: "Fake-Profil" },
+  { id: "harassment", label: "Belästigung" },
+  { id: "photos", label: "Unangemessene Fotos" },
+  { id: "minor", label: "Minderjährig" },
+  { id: "spam", label: "Spam/Betrug" },
+  { id: "other", label: "Sonstiges" },
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number]["id"];
+
 /** Each matched person must send this many chat messages before photos show. */
 export const VEIL_AFTER = 3;
 

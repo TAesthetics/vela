@@ -13,6 +13,8 @@ import {
 import { useVela } from "@/lib/vela/store";
 import { UserButton } from "@/lib/auth/gates";
 import { FieldLabel, Portrait, PrimaryButton, TextInput, cn } from "@/components/vela/ui";
+import { SafetyMenu } from "@/components/vela/safety";
+import { LegalLinks } from "@/components/vela/legal";
 
 export function Signals({
   onChat,
@@ -170,6 +172,7 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
           <p className="truncate font-medium text-paper">{thread.person.name}</p>
           <p className="text-xs text-muted">{thread.unveiled ? "Schleier gefallen" : "Schleier liegt"}</p>
         </div>
+        <SafetyMenu personId={thread.person.id} name={thread.person.name} onDone={onBack} />
       </header>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {thread.unveiled && thread.photo && (
@@ -271,6 +274,7 @@ export function PersonView({
           <ArrowLeft className="size-5" />
         </button>
         <p className="text-sm text-muted">Profil unter dem Schleier</p>
+        <SafetyMenu personId={person.id} name={person.name} onDone={onBack} />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8">
         <Portrait name={person.name} veiled className="h-56 w-full rounded-3xl" />
@@ -456,6 +460,7 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
       <p className="mt-2 text-sm text-muted">
         Löscht dein Profil, deine Swipes und die Nachrichten, an denen du beteiligt bist.
       </p>
+      <LegalLinks className="mt-8" />
     </div>
   );
 }

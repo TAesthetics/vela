@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { deleteProfile, loadVela, saveProfile, sendMessage, setPlus, swipe, undoPass } from "@/lib/vela/api";
+import { blockUser, deleteProfile, loadVela, reportUser, saveProfile, sendMessage, setPlus, swipe, undoPass } from "@/lib/vela/api";
 import { emptySnapshot, type Me, type Person, type Snapshot, type Thread } from "@/lib/vela/data";
 
 export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip";
@@ -28,6 +28,8 @@ type VelaStore = {
   spark: (personId: string, promptId: string, note: string) => Promise<SparkResult>;
   send: (personId: string, text: string) => Promise<void>;
   unlockPlus: () => Promise<void>;
+  block: (personId: string) => Promise<boolean>;
+  report: (personId: string, reason: string, details: string) => Promise<boolean>;
   removeProfile: () => Promise<void>;
   dismissCelebrate: () => void;
   clearToast: () => void;
@@ -122,6 +124,20 @@ export const useVela = create<VelaStore>((set, get) => ({
     const result = await setPlus();
     const toast = result.error ?? (result.snapshot.plus ? "Vela+ ist an." : "Leg zuerst dein Profil an.");
     set(apply(result.snapshot, { toast }));
+  },
+  block: async (personId) => {
+    const result = await blockUser({ data: { toUser: personId } });
+    set(apply(result.snapshot, { toast: result.error ?? "Blockiert. Ihr seht euch nicht mehr." }));
+    return !result.error;
+  },
+  report: async (personId, reason, details) => {
+    const result = await reportUser({ data: { toUser: personId, reason, details } });
+    set(
+      apply(result.snapshot, {
+        toast: result.error ?? "Danke. Gemeldet und blockiert.",
+      }),
+    );
+    return !result.error;
   },
   removeProfile: async () => {
     const snapshot = await deleteProfile();

@@ -5,6 +5,7 @@ import {
   FREE_SWIPES,
   ORBITS,
   PROMPT_BANK,
+  REPORT_REASONS,
   VALUES,
   isUnveiled,
   type Me,
@@ -108,6 +109,18 @@ function stamp(value: unknown) {
   return Number.isFinite(at) ? at : Date.now();
 }
 
+const REASON_IDS = new Set<string>(REPORT_REASONS.map((reason) => reason.id));
+
+/** True when either person has blocked the other. */
+async function isBlocked(sql: Sql, a: string, b: string) {
+  const rows = await sql`
+    select 1 from vela_blocks
+    where (from_user = ${a} and to_user = ${b}) or (from_user = ${b} and to_user = ${a})
+    limit 1
+  `;
+  return rows.length > 0;
+}
+
 async function plusAvailable() {
   // Server-only import, kept out of the client bundle.
   const { isWorkspacePreview } = await import("@/lib/env.server");
@@ -134,7 +147,13 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
     limit 1
   `;
   const otherRows = await sql<{ n: number }>`
-    select count(*) as n from vela_profiles where user_id <> ${userId}
+    select count(*) as n from vela_profiles p
+    where p.user_id <> ${userId}
+      and not exists (
+        select 1 from vela_blocks b
+        where (b.from_user = ${userId} and b.to_user = p.user_id)
+           or (b.from_user = p.user_id and b.to_user = ${userId})
+      )
   `;
   const deckRows = await sql<ProfileRow>`
     select p.user_id, p.name, p.age, p.city, p.orbit, p.values, p.prompts, p.photo, p.plus,
@@ -146,6 +165,11 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
     where p.user_id <> ${userId}
       and not exists (
         select 1 from vela_swipes s where s.from_user = ${userId} and s.to_user = p.user_id
+      )
+      and not exists (
+        select 1 from vela_blocks b
+        where (b.from_user = ${userId} and b.to_user = p.user_id)
+           or (b.from_user = p.user_id and b.to_user = ${userId})
       )
     order by p.created_at desc
     limit 40
@@ -160,6 +184,11 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
      and theirs.direction = 'spark'
     join vela_profiles p on p.user_id = mine.to_user
     where mine.from_user = ${userId} and mine.direction = 'spark'
+      and not exists (
+        select 1 from vela_blocks b
+        where (b.from_user = ${userId} and b.to_user = p.user_id)
+           or (b.from_user = p.user_id and b.to_user = ${userId})
+      )
     order by mine.created_at desc
   `;
   const messageRows = await sql<{
@@ -330,6 +359,9 @@ export const swipe = createServerFn({ method: "POST" })
       from vela_profiles where user_id = ${toUser}
     `;
     if (!target[0]) return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+    if (await isBlocked(sql, context.userId, toUser)) {
+      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+    }
     const existing = await sql<{ direction: string }>`
       select direction from vela_swipes where from_user = ${context.userId} and to_user = ${toUser}
     `;
@@ -432,6 +464,9 @@ export const sendMessage = createServerFn({ method: "POST" })
     if (mutual.length === 0) {
       return { error: "Noch kein Gespräch.", snapshot: await snapshot(sql, context.userId) };
     }
+    if (await isBlocked(sql, context.userId, toUser)) {
+      return { error: "Dieses Gespräch ist beendet.", snapshot: await snapshot(sql, context.userId) };
+    }
     const [pairA, pairB] = pairOf(context.userId, toUser);
     await sql`
       insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
@@ -452,6 +487,49 @@ export const setPlus = createServerFn({ method: "POST" })
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
+async function insertBlock(sql: Sql, from: string, to: string) {
+  await sql`
+    insert into vela_blocks (from_user, to_user) values (${from}, ${to})
+    on conflict (from_user, to_user) do nothing
+  `;
+}
+
+export const blockUser = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { toUser?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const toUser = String(data?.toUser ?? "");
+    const sql = await getSql();
+    if (!toUser || toUser === context.userId) {
+      return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
+    }
+    await insertBlock(sql, context.userId, toUser);
+    return { error: null, snapshot: await snapshot(sql, context.userId) };
+  });
+
+export const reportUser = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { toUser?: string; reason?: string; details?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const toUser = String(data?.toUser ?? "");
+    const reason = String(data?.reason ?? "");
+    const details = String(data?.details ?? "").trim().slice(0, 1000);
+    const sql = await getSql();
+    if (!toUser || toUser === context.userId) {
+      return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
+    }
+    if (!REASON_IDS.has(reason)) {
+      return { error: "Wähl einen Grund.", snapshot: await snapshot(sql, context.userId) };
+    }
+    await sql`
+      insert into vela_reports (id, from_user, to_user, reason, details)
+      values (${crypto.randomUUID()}, ${context.userId}, ${toUser}, ${reason}, ${details})
+    `;
+    // Reporting always blocks, so the reporter never sees this person again.
+    await insertBlock(sql, context.userId, toUser);
+    return { error: null, snapshot: await snapshot(sql, context.userId) };
+  });
+
 export const deleteProfile = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
@@ -459,6 +537,7 @@ export const deleteProfile = createServerFn({ method: "POST" })
     const id = context.userId;
     await sql`delete from vela_messages where pair_a = ${id} or pair_b = ${id}`;
     await sql`delete from vela_swipes where from_user = ${id} or to_user = ${id}`;
+    await sql`delete from vela_blocks where from_user = ${id}`;
     await sql`delete from vela_profiles where user_id = ${id}`;
     return snapshot(sql, context.userId);
   });

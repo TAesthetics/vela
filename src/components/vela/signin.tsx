@@ -1,5 +1,6 @@
 import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
 import { Wordmark } from "@/components/vela/ui";
+import { LegalLinks } from "@/components/vela/legal";
 
 export function SignInPanel() {
   return (
@@ -30,6 +31,10 @@ export function SignInPanel() {
           <p className="text-sm text-muted">Anmeldung ist gerade aus.</p>
         )}
       </div>
+      <p className="mt-6 text-xs text-muted">
+        Nur ab 18. Wie wir mit deinen Daten umgehen, steht in der Datenschutzerklärung.
+      </p>
+      <LegalLinks className="mt-3" />
     </div>
   );
 }
