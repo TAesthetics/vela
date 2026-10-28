@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>VELA</title>
+<style>
+  html,body{margin:0;height:100%;background:#12100e;color:#b3a69a;
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  main{min-height:100%;display:grid;place-items:center;padding:2rem;text-align:center;box-sizing:border-box}
+  h1{font:600 2.5rem/1 Georgia,"Times New Roman",serif;letter-spacing:.06em;color:#f3eee6;margin:0 0 1.5rem}
+  h1 span{color:#e4572e;font-size:.6em;vertical-align:top}
+  p{margin:.25rem 0}
+  button{margin-top:2rem;height:3.25rem;padding:0 2rem;border:0;border-radius:999px;
+    background:#e4572e;color:#12100e;font:600 1rem/1 inherit;font-family:inherit}
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>VELA<span>✦</span></h1>
+    <p style="color:#f3eee6">Gerade keine Verbindung.</p>
+    <p>Prüf dein Internet und versuch es noch einmal.</p>
+    <p lang="en" style="font-size:.85rem;margin-top:1rem">No connection right now. Check your internet and try again.</p>
+    <button type="button" id="retry">Erneut versuchen</button>
+  </div>
+</main>
+<script src="app-url.js"></script>
+<script>
+  (function () {
+    var plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+    try { plugins.SplashScreen && plugins.SplashScreen.hide(); } catch (e) {}
+    document.getElementById("retry").addEventListener("click", function () {
+      if (window.VELA_APP_URL) window.location.replace(window.VELA_APP_URL);
+      else window.location.reload();
+    });
+  })();
+</script>
+</body>
+</html>
