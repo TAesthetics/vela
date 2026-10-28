@@ -157,6 +157,18 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  // Self-hosted deploys (VELA_SELF_HOSTED=1 on Vercel, or Railway) sign in with
+  // e-mail + password only; the client needs to know so it hides the Grok
+  // broker buttons (Google/X). Only "1" or "" reaches the bundle.
+  define: {
+    "import.meta.env.VITE_VELA_SELF_HOSTED": JSON.stringify(
+      process.env.VELA_SELF_HOSTED?.trim() ||
+        process.env.RAILWAY_ENVIRONMENT_NAME?.trim() ||
+        process.env.RAILWAY_ENVIRONMENT?.trim()
+        ? "1"
+        : "",
+    ),
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.

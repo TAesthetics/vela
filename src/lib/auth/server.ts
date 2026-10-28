@@ -82,73 +82,15 @@ const grokIssuer = env("GROK_AUTH_ISSUER") ?? GROK_ISSUER_DEFAULT;
 const grokClientId = env("GROK_AUTH_CLIENT_ID") ?? PREVIEW_CLIENT_ID;
 const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
 
-// Self-hosted (Railway etc.): the Grok broker only knows Grok-hosted apps, so
-// sign in directly with the app's OWN Google / X OAuth clients. Same provider
-// ids as the broker setup, so the client and callback paths stay unchanged:
-//   /api/auth/oauth2/callback/grok-google  and  /api/auth/oauth2/callback/grok-x
+// Self-hosted (own Vercel project, Railway): the Grok broker only knows
+// Grok-hosted apps, so VELA signs in with e-mail + password there (no Google,
+// no X, no third-party login). See `./email-password`.
 const selfHosted = isSelfHosted();
-const googleClientId = env("GOOGLE_CLIENT_ID");
-const googleClientSecret = env("GOOGLE_CLIENT_SECRET");
-const xClientId = env("X_CLIENT_ID");
-const xClientSecret = env("X_CLIENT_SECRET");
-const selfHostedProviders = selfHosted
-  ? [
-      ...(googleClientId && googleClientSecret
-        ? [
-            {
-              providerId: "grok-google",
-              clientId: googleClientId,
-              clientSecret: googleClientSecret,
-              discoveryUrl: "https://accounts.google.com/.well-known/openid-configuration",
-              scopes: ["openid", "profile", "email"],
-              pkce: true,
-              prompt: "select_account" as const,
-            },
-          ]
-        : []),
-      ...(xClientId && xClientSecret
-        ? [
-            {
-              providerId: "grok-x",
-              clientId: xClientId,
-              clientSecret: xClientSecret,
-              authorizationUrl: "https://x.com/i/oauth2/authorize",
-              tokenUrl: "https://api.x.com/2/oauth2/token",
-              scopes: ["users.read", "tweet.read"],
-              pkce: true,
-              authentication: "basic" as const,
-              // X has no e-mail scope here; use a stable synthetic address
-              // (never mailed), like the broker does.
-              getUserInfo: async (tokens: { accessToken?: string }) => {
-                const res = await fetch(
-                  "https://api.x.com/2/users/me?user.fields=profile_image_url",
-                  {
-                    headers: { authorization: `Bearer ${tokens.accessToken ?? ""}` },
-                  },
-                );
-                if (!res.ok) return null;
-                const body = (await res.json()) as {
-                  data?: { id: string; name?: string; profile_image_url?: string };
-                };
-                if (!body.data?.id) return null;
-                return {
-                  id: body.data.id,
-                  name: body.data.name ?? "X",
-                  image: body.data.profile_image_url,
-                  email: `${body.data.id}@x.users.invalid`,
-                  emailVerified: false,
-                };
-              },
-            },
-          ]
-        : []),
-    ]
-  : [];
 
-/** True when federated sign-in is active (real auth is enforced). */
+/** True when real sign-in is active (auth is enforced). */
 export const authConfigured =
   !authDisabled &&
-  (selfHosted ? selfHostedProviders.length > 0 : Boolean(grokClientId && grokClientSecret));
+  (emailAndPasswordEnabled || (!selfHosted && Boolean(grokClientId && grokClientSecret)));
 
 // This app's own Better Auth origin. When deployed the deployer injects the
 // public URL. In the sandbox live preview there's no fixed URL (each preview gets
@@ -216,10 +158,9 @@ export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
 
 // Built separately so the `betterAuth({...})` call stays easy to edit without
 // breaking brackets (models often trip on the conditional plugin spread).
-const grokOAuthPlugin = !authConfigured
-  ? null
-  : selfHosted
-    ? genericOAuth({ config: selfHostedProviders })
+const grokOAuthPlugin =
+  authDisabled || selfHosted || !grokClientId || !grokClientSecret
+    ? null
     : genericOAuth({
         config: GROK_PROVIDERS.map(({ providerId, idp }) => ({
           providerId,
@@ -281,7 +222,19 @@ export const auth = betterAuth({
   session: { cookieCache: { enabled: true, maxAge: 300 } },
 
   // Local email/password — toggled only via `./email-password` (not a plugin).
-  ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true } } : {}),
+  // No mail service: no verification mail and no reset mail (reset by e-mail
+  // to the operator, see the login screen).
+  ...(emailAndPasswordEnabled
+    ? {
+        emailAndPassword: {
+          enabled: true,
+          minPasswordLength: 8,
+          maxPasswordLength: 128,
+          requireEmailVerification: false,
+          autoSignIn: true,
+        },
+      }
+    : {}),
 
   // `__Host-` prefixed cookies: the browser REFUSES any same-named cookie that
   // carries a `Domain` attribute, so a sibling `*.grok.me` app cannot "toss" a

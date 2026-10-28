@@ -153,6 +153,51 @@ export async function signIn(
   if (data?.url) window.location.href = data.url;
 }
 
+// ── E-mail + password ────────────────────────────────────────────────────────
+// Same-origin POSTs to this app's Better Auth. In the live-preview iframe the
+// session cookie is partitioned/blocked, so keep the bearer token Better Auth
+// returns in `set-auth-token` (bearer plugin), exactly like the popup flow.
+
+/** German message for a Better Auth e-mail/password error. */
+export function emailAuthErrorMessage(error: { code?: string; status?: number; message?: string } | null): string {
+  const code = error?.code ?? "";
+  if (error?.status === 429) return "Zu viele Versuche. Warte kurz und versuch es dann noch einmal.";
+  if (code.startsWith("USER_ALREADY_EXISTS")) return "Mit dieser E-Mail gibt es schon ein Konto. Melde dich an.";
+  if (code === "INVALID_EMAIL_OR_PASSWORD" || code === "CREDENTIAL_ACCOUNT_NOT_FOUND")
+    return "E-Mail oder Passwort stimmt nicht.";
+  if (code === "PASSWORD_TOO_SHORT") return "Das Passwort braucht mindestens 8 Zeichen.";
+  if (code === "PASSWORD_TOO_LONG") return "Das Passwort ist zu lang (höchstens 128 Zeichen).";
+  if (code === "INVALID_EMAIL") return "Bitte gib eine gültige E-Mail-Adresse ein.";
+  return "Das hat nicht geklappt. Bitte versuch es noch einmal.";
+}
+
+function keepPreviewBearer(response: Response) {
+  if (!inLivePreview()) return;
+  const token = response.headers.get("set-auth-token");
+  if (token) setBearerToken(token);
+}
+
+/** Sign in with e-mail + password. Throws a German message on failure. */
+export async function signInWithEmail(email: string, password: string): Promise<void> {
+  const { error } = await authClient.signIn.email(
+    { email: email.trim(), password },
+    { onSuccess: (ctx) => keepPreviewBearer(ctx.response) },
+  );
+  if (error) throw new Error(emailAuthErrorMessage(error));
+}
+
+/** Create an account with e-mail + password (signed in right after). */
+export async function signUpWithEmail(email: string, password: string): Promise<void> {
+  const clean = email.trim();
+  // Better Auth needs a name; the public VELA name is set in onboarding.
+  const name = clean.split("@")[0]?.slice(0, 40) || "Vela";
+  const { error } = await authClient.signUp.email(
+    { email: clean, password, name },
+    { onSuccess: (ctx) => keepPreviewBearer(ctx.response) },
+  );
+  if (error) throw new Error(emailAuthErrorMessage(error));
+}
+
 /**
  * Open `/auth/popup` in a new window. Must run synchronously inside the click
  * handler (no await before this). The path is served by the template Vite
