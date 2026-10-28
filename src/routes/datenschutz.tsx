@@ -119,10 +119,10 @@ function Datenschutz() {
           Profil, Swipes, Matches und Nachrichten speichern wir, solange dein Profil besteht. Löschst du
           dein Profil (Ich → „Profil löschen“), werden Profil, Foto, Swipes, deine Blockierungen und alle
           Nachrichten, an denen du beteiligt warst, sofort gelöscht. Meldungen bewahren wir zum Schutz
-          anderer bis zu [Frist, z. B. 12 Monate] auf. Dein Anmeldekonto löschen wir auf Anfrage an{" "}
+          anderer bis zu 12 Monate auf. Dein Anmeldekonto löschen wir auf Anfrage an{" "}
           {OPERATOR.email} vollständig. Ausweisbilder löschen wir nach der Entscheidung, spätestens nach
           30 Tagen. Das Prüfprotokoll der Altersprüfung und das Ergebnis einer Ausweisprüfung bewahren wir auf,
-          solange eine Sperre besteht, und danach bis zu [Frist, z. B. 12 Monate], damit eine Sperre nicht durch
+          solange eine Sperre besteht, und danach bis zu 12 Monate, damit eine Sperre nicht durch
           Löschen und Neuanlegen des Profils umgangen werden kann. Server-Protokolle des Hosters werden nach
           kurzer Zeit automatisch gelöscht.
         </p>

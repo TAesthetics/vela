@@ -24,10 +24,6 @@ export function LegalPage({ title, children }: { title: string; children: ReactN
         ← Zurück zu Vela
       </Link>
       <h1 className="mt-6 font-display text-4xl">{title}</h1>
-      <p className="mt-4 rounded-2xl border border-line p-4 text-xs text-muted">
-        Vorlage, keine Rechtsberatung. Werte in [eckigen Klammern] sind Platzhalter und müssen vor dem
-        öffentlichen Betrieb ergänzt und von einer fachkundigen Stelle geprüft werden.
-      </p>
       <div className="legal mt-8 grid gap-6 text-sm leading-relaxed text-paper/90">{children}</div>
       <LegalLinks className="mt-12" />
     </main>

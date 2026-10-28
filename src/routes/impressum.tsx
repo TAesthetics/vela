@@ -19,17 +19,8 @@ function Impressum() {
         </p>
         <p>
           E-Mail: {OPERATOR.email}
-          <br />
-          Telefon: {OPERATOR.phone}
         </p>
         <p>Unternehmensgegenstand: {OPERATOR.purpose}</p>
-        <p>
-          Firmenbuch: {OPERATOR.register}
-          <br />
-          UID-Nummer: {OPERATOR.uid}
-          <br />
-          Aufsichtsbehörde: {OPERATOR.authority}
-        </p>
       </Section>
       <Section title="Grundlegende Richtung (§ 25 Abs. 4 MedienG)">
         <p>
