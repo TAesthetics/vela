@@ -375,8 +375,8 @@ export const loadVela = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
-    // Opportunistic retention: ID images never outlive 30 days.
-    await (await ageReview()).purgeOldIdImages(sql);
+    // Retention on every load: reports 12 months, ID images 30 days (no cron).
+    await (await ageReview()).purgeExpired(sql);
     return snapshot(sql, context.userId);
   });
 

@@ -62,8 +62,8 @@ function iso(value: unknown) {
 }
 
 async function load(sql: Sql): Promise<AdminData> {
-  const { purgeOldIdImages } = await import("@/lib/vela/age-review.server");
-  await purgeOldIdImages(sql);
+  const { purgeExpired } = await import("@/lib/vela/age-review.server");
+  await purgeExpired(sql);
   const checks = await sql<{ id: string; user_id: string; name: string | null; age: number | null; created_at: unknown; image: string | null }>`
     select c.id, c.user_id, p.name, p.age, c.created_at, c.image
     from vela_id_checks c left join vela_profiles p on p.user_id = c.user_id

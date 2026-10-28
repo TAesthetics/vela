@@ -48,6 +48,45 @@ export async function purgeOldIdImages(sql: Sql) {
 }
 
 /**
+ * Retention (see /datenschutz, "Speicherdauer"). Runs whenever the app or the
+ * admin page loads — there is no cron. Cheap: every statement hits only rows
+ * past their deadline.
+ *  - ID images: 30 days.
+ *  - Reports: 12 months.
+ *  - Remembered identities of accounts deleted while suspended: 12 months.
+ *  - Age-review log and decided ID checks: 12 months, unless the person is
+ *    still suspended (an open suspension keeps its history).
+ */
+export async function purgeExpired(sql: Sql) {
+  await purgeOldIdImages(sql);
+  await sql`delete from vela_reports where created_at < now() - interval '12 months'`;
+  await sql`delete from vela_deleted_identities where created_at < now() - interval '12 months'`;
+  await sql`
+    delete from vela_age_flags f
+    where f.created_at < now() - interval '12 months'
+      and not exists (
+        select 1 from vela_profiles p where p.user_id = f.user_id and p.status <> 'active'
+      )
+      and not (
+        f.action = 'suspended'
+        and exists (select 1 from "user" u where u.id = f.user_id)
+        and not exists (
+          select 1 from vela_id_checks c
+          where c.user_id = f.user_id and c.status = 'approved' and c.decided_at > f.created_at
+        )
+      )
+  `;
+  await sql`
+    delete from vela_id_checks c
+    where c.image is null
+      and coalesce(c.decided_at, c.created_at) < now() - interval '12 months'
+      and not exists (
+        select 1 from vela_profiles p where p.user_id = c.user_id and p.status <> 'active'
+      )
+  `;
+}
+
+/**
  * Keyed hash of a login identity (provider + account id). Lets an open age
  * suspension survive full account deletion without keeping who it was.
  */
