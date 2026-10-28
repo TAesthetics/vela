@@ -18,7 +18,8 @@ import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl =
+  process.env.DATABASE_URL || process.env.STORAGE_URL || process.env.POSTGRES_URL;
 // Railway: the private database network isn't reachable while building, so
 // the build skips here and `npm start` (scripts/start.mjs) migrates instead.
 const railway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;

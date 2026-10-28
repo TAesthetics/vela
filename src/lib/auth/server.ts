@@ -190,7 +190,8 @@ const trustedOrigins: string[] = explicitBaseURL
       ...LOCAL_DEV_ORIGINS,
     ];
 
-const databaseUrl = env("DATABASE_URL");
+// Vercel's Neon integration may name it STORAGE_URL / POSTGRES_URL instead.
+const databaseUrl = env("DATABASE_URL") ?? env("STORAGE_URL") ?? env("POSTGRES_URL");
 
 // Static broker OAuth endpoints (skip OIDC discovery on every sign-in / callback).
 // Discovery would cost an extra network hop to the broker before the popup can
