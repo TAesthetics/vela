@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AgbRouteImport } from './routes/agb'
 import { Route as DatenschutzRouteImport } from './routes/datenschutz'
 import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as ImpressumRouteImport } from './routes/impressum'
@@ -17,10 +18,16 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminAgeRouteImport } from './routes/admin/age'
 import { Route as AuthNativeRouteImport } from './routes/auth/native'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgbRoute = AgbRouteImport.update({
+  id: '/agb',
+  path: '/agb',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DatenschutzRoute = DatenschutzRouteImport.update({
@@ -58,9 +65,15 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
+  id: '/api/stripe/webhook',
+  path: '/api/stripe/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agb': typeof AgbRoute
   '/datenschutz': typeof DatenschutzRoute
   '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
@@ -68,9 +81,11 @@ export interface FileRoutesByFullPath {
   '/admin/age': typeof AdminAgeRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agb': typeof AgbRoute
   '/datenschutz': typeof DatenschutzRoute
   '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
@@ -78,10 +93,12 @@ export interface FileRoutesByTo {
   '/admin/age': typeof AdminAgeRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agb': typeof AgbRoute
   '/datenschutz': typeof DatenschutzRoute
   '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
@@ -89,11 +106,13 @@ export interface FileRoutesById {
   '/admin/age': typeof AdminAgeRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agb'
     | '/datenschutz'
     | '/healthz'
     | '/impressum'
@@ -101,9 +120,11 @@ export interface FileRouteTypes {
     | '/admin/age'
     | '/auth/native'
     | '/api/auth/$'
+    | '/api/stripe/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agb'
     | '/datenschutz'
     | '/healthz'
     | '/impressum'
@@ -111,9 +132,11 @@ export interface FileRouteTypes {
     | '/admin/age'
     | '/auth/native'
     | '/api/auth/$'
+    | '/api/stripe/webhook'
   id:
     | '__root__'
     | '/'
+    | '/agb'
     | '/datenschutz'
     | '/healthz'
     | '/impressum'
@@ -121,10 +144,12 @@ export interface FileRouteTypes {
     | '/admin/age'
     | '/auth/native'
     | '/api/auth/$'
+    | '/api/stripe/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgbRoute: typeof AgbRoute
   DatenschutzRoute: typeof DatenschutzRoute
   HealthzRoute: typeof HealthzRoute
   ImpressumRoute: typeof ImpressumRoute
@@ -132,6 +157,7 @@ export interface RootRouteChildren {
   AdminAgeRoute: typeof AdminAgeRoute
   AuthNativeRoute: typeof AuthNativeRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -141,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agb': {
+      id: '/agb'
+      path: '/agb'
+      fullPath: '/agb'
+      preLoaderRoute: typeof AgbRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/datenschutz': {
@@ -192,11 +225,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/stripe/webhook': {
+      id: '/api/stripe/webhook'
+      path: '/api/stripe/webhook'
+      fullPath: '/api/stripe/webhook'
+      preLoaderRoute: typeof ApiStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgbRoute: AgbRoute,
   DatenschutzRoute: DatenschutzRoute,
   HealthzRoute: HealthzRoute,
   ImpressumRoute: ImpressumRoute,
@@ -204,6 +245,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAgeRoute: AdminAgeRoute,
   AuthNativeRoute: AuthNativeRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiStripeWebhookRoute: ApiStripeWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
