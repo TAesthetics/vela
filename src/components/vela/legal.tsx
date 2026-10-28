@@ -13,6 +13,9 @@ export function LegalLinks({ className }: { className?: string }) {
       <Link to="/impressum" className="underline-offset-4 hover:underline">
         Impressum
       </Link>
+      <Link to="/agb" className="underline-offset-4 hover:underline">
+        AGB
+      </Link>
     </nav>
   );
 }

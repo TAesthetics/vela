@@ -96,7 +96,30 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="8. Speicherung im Browser">
+      <Section title="8. Vela+ und Zahlungen über Stripe">
+        <p>
+          Wenn du Vela+ abschließt, läuft die Zahlung über Stripe. Vertragspartner für die Zahlungsabwicklung ist
+          Stripe Payments Europe, Ltd., 1 Grand Canal Street Lower, Grand Canal Dock, Dublin, D02 H210, Irland.
+          Deine Zahlungsdaten (z. B. Karte, Apple Pay oder Google Pay) gibst du direkt auf der Bezahlseite von
+          Stripe ein; wir sehen und speichern sie nie. Stripe verarbeitet sie als eigener Verantwortlicher bzw. als
+          Zahlungsdienstleister nach seiner Datenschutzerklärung (stripe.com/at/privacy). Stripe kann Daten auch in
+          die USA übermitteln; dafür gelten das EU-US Data Privacy Framework bzw. Standardvertragsklauseln.
+        </p>
+        <p>
+          Wir übermitteln an Stripe deine E-Mail-Adresse und deine Nutzerkennung, damit die Zahlung deinem Konto
+          zugeordnet werden kann. Von Stripe erhalten und speichern wir nur: eine Kunden- und Abo-Kennung, den
+          Abo-Status (z. B. aktiv, gekündigt, Zahlung fehlgeschlagen) und das Ende des bezahlten Zeitraums.
+          Rechtsgrundlage: Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO) sowie unsere gesetzlichen
+          Aufbewahrungspflichten (Art. 6 Abs. 1 lit. c DSGVO).
+        </p>
+        <p>
+          Rechnungen und Zahlungsbelege werden bei Stripe gespeichert und aus steuerrechtlichen Gründen 7 Jahre
+          aufbewahrt (§ 132 BAO). Löschst du dein Konto, beenden wir ein laufendes Abo sofort und löschen die
+          Abo-Daten in unserer Datenbank; die Belege bei Stripe bleiben bis zum Ablauf dieser Frist erhalten.
+        </p>
+      </Section>
+
+      <Section title="9. Speicherung im Browser">
         <p>
           Im Browser speichern wir nur technisch notwendige Daten: das Sitzungs-Cookie bzw. -Token und
           lokale Einstellungen (z. B. welche Nachrichten du gesehen hast). Wir verwenden keine Tracking-
@@ -104,16 +127,16 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="9. Hosting und Empfänger">
+      <Section title="10. Hosting und Empfänger">
         <p>
           Die App wird bei Vercel Inc. (USA) gehostet; die Datenbank liegt bei {OPERATOR.database}.
           Diese Anbieter verarbeiten Daten in unserem Auftrag (Art. 28 DSGVO). Bei Übermittlungen in die
-          USA stützen wir uns auf das EU-US Data Privacy Framework bzw. Standardvertragsklauseln. Eine Weitergabe an
-          sonstige Dritte oder ein Verkauf deiner Daten findet nicht statt.
+          USA stützen wir uns auf das EU-US Data Privacy Framework bzw. Standardvertragsklauseln. Für Zahlungen bei
+          Vela+ siehe Punkt 8 (Stripe). Eine Weitergabe an sonstige Dritte oder ein Verkauf deiner Daten findet nicht statt.
         </p>
       </Section>
 
-      <Section title="10. Speicherdauer">
+      <Section title="11. Speicherdauer">
         <p>
           Profil, Swipes, Matches und Nachrichten speichern wir, solange dein Konto besteht. Löschst du dein
           Konto (Ich → „Konto löschen“), löschen wir sofort und vollständig (Art. 17 DSGVO): Profil, Foto, Swipes,
@@ -125,11 +148,11 @@ function Datenschutz() {
           dein Konto während einer offenen Alterssperre, behalten wir zusätzlich nur einen nicht umkehrbaren
           Prüfwert (Hash) deiner Anmeldekennung, höchstens 12 Monate lang, damit die Sperre nicht durch eine neue
           Anmeldung umgangen werden kann; Name, E-Mail-Adresse und Profildaten sind darin nicht enthalten.
-          Server-Protokolle des Hosters werden nach kurzer Zeit automatisch gelöscht.
+          Abo-Daten und Rechnungen bei Vela+ siehe Punkt 8. Server-Protokolle des Hosters werden nach kurzer Zeit automatisch gelöscht.
         </p>
       </Section>
 
-      <Section title="11. Deine Rechte">
+      <Section title="12. Deine Rechte">
         <p>
           Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17),
           Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch
@@ -142,7 +165,7 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="12. Open Source">
+      <Section title="13. Open Source">
         <p>
           Der Code von Vela ist öffentlich (github.com/TAesthetics/vela). Du kannst nachlesen, welche Daten
           gespeichert werden und wie der Schleier funktioniert.

@@ -5,6 +5,7 @@ import {
   ORBITS,
   VEIL_AFTER,
   VALUES,
+  PLUS_PRICE_LABEL,
   formatTime,
   orbitLabel,
   resonance,
@@ -470,6 +471,21 @@ export function Plus({ onBack }: { onBack: () => void }) {
   const plus = useVela((state) => state.plus);
   const unlockPlus = useVela((state) => state.unlockPlus);
   const plusAvailable = useVela((state) => state.plusAvailable);
+  const billing = useVela((state) => state.billing);
+  const checkoutPlus = useVela((state) => state.checkoutPlus);
+  const managePlus = useVela((state) => state.managePlus);
+  const [busy, setBusy] = useState(false);
+  const periodEnd = billing.periodEnd
+    ? new Intl.DateTimeFormat("de-AT", { day: "numeric", month: "long", year: "numeric" }).format(
+        new Date(billing.periodEnd),
+      )
+    : null;
+  const run = async (action: () => Promise<string | null>) => {
+    setBusy(true);
+    const error = await action();
+    // On success the page navigates to Stripe; keep the button disabled meanwhile.
+    if (error) setBusy(false);
+  };
   const features = [
     { icon: Eye, title: "Wer schon wartet", line: "Sieh die Menschen, die im Stillen zurückfunken würden." },
     { icon: Flame, title: "Unbegrenzte Swipes", line: "Kostenlos 12 am Tag, links oder rechts. Vela+ hört nicht auf." },
@@ -502,19 +518,62 @@ export function Plus({ onBack }: { onBack: () => void }) {
           ))}
         </ul>
         <p className="mt-6 font-display text-4xl text-paper tabular-nums">
-          12,90 € <span className="font-sans text-base text-muted">/ Monat</span>
+          {PLUS_PRICE_LABEL} <span className="font-sans text-base text-muted">/ Monat, jederzeit kündbar</span>
         </p>
         <p className="mt-2 text-sm text-muted">
-          {plusAvailable ? "Jederzeit kündbar. In dieser Vorschau ohne Abbuchung." : "Jederzeit kündbar."}
+          {plusAvailable
+            ? "In dieser Vorschau ohne Abbuchung."
+            : "Mit Karte, Apple Pay oder Google Pay. Die Zahlung läuft sicher über Stripe."}
         </p>
-        <div className="mt-6">
+        <div className="mt-6 grid gap-3">
           {plus ? (
-            <p className="rounded-full bg-surface py-3 text-center text-sm text-paper">Vela+ ist aktiv</p>
+            <>
+              <p className="rounded-full bg-surface py-3 text-center text-sm text-paper">Vela+ ist aktiv</p>
+              {periodEnd && (
+                <p className="text-center text-sm text-muted">
+                  {billing.cancelAtPeriodEnd ? `Gekündigt, läuft bis ${periodEnd}.` : `Verlängert sich am ${periodEnd}.`}
+                  {billing.status === "past_due" ? " Die letzte Zahlung hat nicht geklappt." : ""}
+                </p>
+              )}
+              {billing.customer && billing.configured && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(managePlus)}
+                  className="h-12 rounded-full border border-line text-base text-paper disabled:opacity-50"
+                >
+                  {busy ? "Öffne …" : "Abo verwalten"}
+                </button>
+              )}
+            </>
           ) : plusAvailable ? (
             <PrimaryButton onClick={() => void unlockPlus()}>In der Vorschau freischalten</PrimaryButton>
+          ) : billing.configured ? (
+            <>
+              <PrimaryButton disabled={busy} onClick={() => void run(checkoutPlus)}>
+                {busy ? "Öffne Bezahlseite …" : `Vela+ holen · ${PLUS_PRICE_LABEL} / Monat`}
+              </PrimaryButton>
+              <p className="text-xs text-muted">
+                Mit dem Kauf akzeptierst du die{" "}
+                <a href="/agb" className="underline underline-offset-4">
+                  Abo-Bedingungen
+                </a>{" "}
+                und verlangst, dass Vela+ sofort startet. Kündigen geht jederzeit zum Ende des Monats.
+              </p>
+              {billing.customer && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(managePlus)}
+                  className="h-11 text-sm text-muted underline-offset-4 hover:underline"
+                >
+                  Abo verwalten
+                </button>
+              )}
+            </>
           ) : (
-            <p className="rounded-full bg-surface py-3 text-center text-sm text-muted">
-              Plus kommt bald. Bezahlen geht noch nicht.
+            <p className="rounded-full bg-surface px-4 py-3 text-center text-sm text-muted">
+              Zahlungen sind noch nicht eingerichtet.
             </p>
           )}
         </div>
