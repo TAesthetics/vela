@@ -18,16 +18,16 @@ Diese Anleitung bringt VELA als iOS- und Android-App in die Stores. Stand: Oktob
 
 ### Einmal einrichten
 
-1. **Produktions-URL:** die öffentliche Adresse deines Railway-Dienstes (siehe `docs/RAILWAY.md`, Schritt 2), z. B. `https://vela-production-xxxx.up.railway.app` oder deine eigene Domain. Sie muss mit `https://` beginnen, darf keinen Pfad haben und muss **dieselbe** sein wie `BETTER_AUTH_URL` auf Railway.
+1. **Produktions-URL:** die öffentliche Adresse von VELA, z. B. `https://vela-xxxx.vercel.app` (siehe `docs/VERCEL.md`) oder deine eigene Domain. Sie muss mit `https://` beginnen, darf keinen Pfad haben und muss **dieselbe** sein wie `BETTER_AUTH_URL`.
 2. Node 22 oder neuer, dann:
    ```bash
    npm ci
-   VELA_APP_URL=https://vela-production-xxxx.up.railway.app npm run native:setup
+   VELA_APP_URL=https://vela-xxxx.vercel.app npm run native:setup
    ```
    Das legt `ios/` und `android/` an, erzeugt Icons und Splash-Screens, trägt den Deep Link `vela://auth` ein, setzt die Texte für Kamera und Fotos sowie „nur Hochformat“ (iPhone) und synchronisiert alles. Du kannst den Befehl beliebig oft wiederholen.
 3. Öffnen: `npm run native:ios` (Xcode, nur auf dem Mac) bzw. `npm run native:android` (Android Studio).
 
-Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Google/X-Rückleitung wie die Website (`/api/auth/oauth2/callback/grok-google` bzw. `grok-x`, siehe `docs/RAILWAY.md`, Schritt 4). Wichtig ist nur, dass `BETTER_AUTH_URL` auf Railway dieselbe Domain ist wie `VELA_APP_URL`.
+Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Google/X-Rückleitung wie die Website (`/api/auth/oauth2/callback/grok-google` bzw. `grok-x`, siehe `docs/VERCEL.md`, Schritt 4). Wichtig ist nur, dass `BETTER_AUTH_URL` im Hosting dieselbe Domain ist wie `VELA_APP_URL`.
 
 ## 2. Vor der Einreichung: offene Punkte
 
@@ -72,7 +72,7 @@ Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Goog
          environment:
            node: 22
            vars:
-             VELA_APP_URL: https://vela-production-xxxx.up.railway.app
+             VELA_APP_URL: https://vela-xxxx.vercel.app
            ios_signing:
              distribution_type: app_store
              bundle_identifier: at.vela.app
@@ -161,7 +161,7 @@ Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Goog
 
      - Daten werden bei der Übertragung **verschlüsselt** (HTTPS): ja.
      - **Löschung möglich:** ja, in der App (Ich → „Konto löschen“) und per Web-Link bzw. E-Mail.
-     - Hosting und Datenbank (Railway) sind Auftragsverarbeiter. Das gilt laut Google nicht als „Teilen“.
+     - Hosting (Vercel) und Datenbank (Neon) sind Auftragsverarbeiter. Das gilt laut Google nicht als „Teilen“.
 3. **Store-Eintrag:** Texte aus Abschnitt 5, App-Symbol 512×512 und Vorstellungsgrafik 1024×500. Beide erzeugt `npm run native:assets` im Ordner `store-assets/`. Dazu mindestens 2 Handy-Screenshots.
 4. **Test → Geschlossener Test:** AAB hochladen, Tester einladen und 14 Tage laufen lassen, dann Produktion beantragen.
 

@@ -2,7 +2,7 @@
  * Create / refresh the native iOS + Android projects for the App Store and
  * Google Play (see docs/STORE.md). Idempotent — run it again after changes.
  *
- *   VELA_APP_URL=https://vela-production-xxxx.up.railway.app npm run native:setup
+ *   VELA_APP_URL=https://vela-xxxx.vercel.app npm run native:setup
  *
  * 1. writes native/www/app-url.js (retry target of the offline screen)
  * 2. `cap add ios` / `cap add android` if the folders don't exist yet
@@ -20,7 +20,7 @@ const appUrl = process.env.VELA_APP_URL?.trim().replace(/\/+$/, "");
 if (!appUrl || !/^https:\/\/[^/]+$/.test(appUrl)) {
   console.error(
     "VELA_APP_URL fehlt oder ist ungültig. Beispiel:\n" +
-      "  VELA_APP_URL=https://vela-production-xxxx.up.railway.app npm run native:setup",
+      "  VELA_APP_URL=https://vela-xxxx.vercel.app npm run native:setup",
   );
   process.exit(1);
 }

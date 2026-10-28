@@ -8,9 +8,9 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * the deployed web app from VELA_APP_URL. `native/www` holds only the local
  * fallback page shown when the server can't be reached (offline screen).
  *
- * Set the production URL (the Railway domain, see docs/RAILWAY.md) before
+ * Set the production URL (the production domain, see docs/VERCEL.md) before
  * `npm run native:setup`:
- *   VELA_APP_URL=https://vela-production-xxxx.up.railway.app npm run native:setup
+ *   VELA_APP_URL=https://vela-xxxx.vercel.app npm run native:setup
  * It must be the same origin as BETTER_AUTH_URL on the server.
  */
 const appUrl = process.env.VELA_APP_URL?.trim().replace(/\/+$/, "") ?? "";
