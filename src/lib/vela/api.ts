@@ -30,6 +30,7 @@ type ProfileRow = {
   plus: boolean | string;
   status?: string;
   sparked_you?: boolean | string;
+  adult_confirmed_at?: string | Date | null;
 };
 
 const ORBIT_IDS = new Set<string>(ORBITS.map((orbit) => orbit.id));
@@ -99,6 +100,7 @@ function toMe(row: ProfileRow): Me {
     prompts: asPrompts(row.prompts),
     photo: row.photo,
     onboarded: true,
+    adultConfirmed: Boolean(row.adult_confirmed_at),
   };
 }
 
@@ -191,7 +193,7 @@ async function suspensionSnapshot(sql: Sql, userId: string): Promise<Snapshot> {
 async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
   const day = berlinDay();
   const mine = await sql<ProfileRow>`
-    select user_id, name, age, city, orbit, values, prompts, photo, plus, status
+    select user_id, name, age, city, orbit, values, prompts, photo, plus, status, adult_confirmed_at
     from vela_profiles where user_id = ${userId}
   `;
   const meRow = mine[0];
@@ -324,6 +326,7 @@ function cleanProfile(input: unknown): { me: Me } | { error: string } {
   const orbit = String(raw.orbit ?? "");
   if (name.length < 2 || name.length > 32) return { error: "Wie sollen wir dich nennen?" };
   if (!Number.isInteger(age) || age < 18 || age > 99) return { error: "Vela ist nur für Erwachsene." };
+  if (raw.adultConfirmed !== true) return { error: "Bitte bestätige, dass du mindestens 18 Jahre alt bist." };
   if (city.length < 2 || city.length > 40) return { error: "In welcher Stadt bist du?" };
   if (!ORBIT_IDS.has(orbit)) return { error: "Wähl einen Orbit." };
   const values = Array.isArray(raw.values) ? raw.values.map(String) : [];
@@ -363,6 +366,7 @@ function cleanProfile(input: unknown): { me: Me } | { error: string } {
       prompts: cleanPrompts,
       photo,
       onboarded: true,
+      adultConfirmed: true,
     },
   };
 }
@@ -388,9 +392,10 @@ export const saveProfile = createServerFn({ method: "POST" })
     // profile starts suspended while an age suspension is still open.
     const suspended = (await statusOf(sql, context.userId)) !== "active" || (await openAgeSuspension(sql, context.userId));
     await sql.query(
-      `insert into vela_profiles (user_id, name, age, city, orbit, values, prompts, photo, status)
-       values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
+      `insert into vela_profiles (user_id, name, age, city, orbit, values, prompts, photo, status, adult_confirmed_at)
+       values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, now())
        on conflict (user_id) do update set
+         adult_confirmed_at = coalesce(vela_profiles.adult_confirmed_at, excluded.adult_confirmed_at),
          name = excluded.name,
          age = excluded.age,
          city = excluded.city,

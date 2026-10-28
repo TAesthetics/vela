@@ -11,6 +11,8 @@ export type Me = {
   prompts: Prompt[];
   photo: string | null;
   onboarded: boolean;
+  /** Ticked "Ich bin mindestens 18 Jahre alt" (stored server-side with a timestamp). */
+  adultConfirmed: boolean;
 };
 
 export type Person = {
@@ -158,6 +160,7 @@ export function blankMe(): Me {
     ],
     photo: null,
     onboarded: false,
+    adultConfirmed: false,
   };
 }
 

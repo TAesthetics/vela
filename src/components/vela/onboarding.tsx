@@ -20,6 +20,7 @@ export function Onboarding() {
       if (draft.name.trim().length < 2) return "Wie sollen wir dich nennen?";
       if (draft.age < 18 || draft.age > 99) return "Vela ist nur für Erwachsene.";
       if (draft.city.trim().length < 2) return "In welcher Stadt bist du heute Nacht?";
+      if (!draft.adultConfirmed) return "Bitte bestätige, dass du mindestens 18 Jahre alt bist.";
     }
     if (step === 3) {
       if (draft.prompts.some((prompt) => prompt.a.trim().length < 8)) {
@@ -156,6 +157,19 @@ function Basics({
       <label>
         <FieldLabel>Stadt</FieldLabel>
         <TextInput value={draft.city} placeholder="Berlin" onChange={(city) => patch({ city })} />
+      </label>
+      <label className="flex items-start gap-3 text-sm text-paper">
+        <input
+          type="checkbox"
+          required
+          checked={draft.adultConfirmed}
+          onChange={(event) => patch({ adultConfirmed: event.target.checked })}
+          className="mt-0.5 size-5 shrink-0 accent-ember"
+        />
+        <span>
+          Ich bin mindestens 18 Jahre alt.
+          <span className="block text-xs text-muted">Pflicht. Vela ist nur für Erwachsene.</span>
+        </span>
       </label>
       <label>
         <FieldLabel>Porträt, optional</FieldLabel>
