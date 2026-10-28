@@ -1,12 +1,13 @@
 import { create } from "zustand";
-import { blockUser, deleteProfile, loadVela, reportUser, saveProfile, sendMessage, setPlus, swipe, undoPass } from "@/lib/vela/api";
-import { emptySnapshot, type Me, type Person, type Snapshot, type Thread } from "@/lib/vela/data";
+import { blockUser, deleteProfile, loadVela, reportUser, uploadIdDocument, saveProfile, sendMessage, setPlus, swipe, undoPass } from "@/lib/vela/api";
+import { emptySnapshot, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
 export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip";
 
 type VelaStore = {
   ready: boolean;
   me: Me | null;
+  suspension: Suspension | null;
   plus: boolean;
   plusAvailable: boolean;
   swipesLeft: number | null;
@@ -29,6 +30,7 @@ type VelaStore = {
   send: (personId: string, text: string) => Promise<void>;
   unlockPlus: () => Promise<void>;
   block: (personId: string) => Promise<boolean>;
+  uploadId: (image: string) => Promise<string | null>;
   report: (personId: string, reason: string, details: string) => Promise<boolean>;
   removeProfile: () => Promise<void>;
   dismissCelebrate: () => void;
@@ -56,6 +58,7 @@ function readSeen() {
 function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
   return {
     me: snapshot.me,
+    suspension: snapshot.suspension,
     plus: snapshot.plus,
     plusAvailable: snapshot.plusAvailable,
     swipesLeft: snapshot.swipesLeft,
@@ -124,6 +127,11 @@ export const useVela = create<VelaStore>((set, get) => ({
     const result = await setPlus();
     const toast = result.error ?? (result.snapshot.plus ? "Vela+ ist an." : "Leg zuerst dein Profil an.");
     set(apply(result.snapshot, { toast }));
+  },
+  uploadId: async (image) => {
+    const result = await uploadIdDocument({ data: { image } });
+    set(apply(result.snapshot, { toast: result.error ?? "Danke. Wir prüfen deinen Ausweis." }));
+    return result.error;
   },
   block: async (personId) => {
     const result = await blockUser({ data: { toUser: personId } });

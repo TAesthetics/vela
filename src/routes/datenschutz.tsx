@@ -65,7 +65,44 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="6. Speicherung im Browser">
+      <Section title="6. KI-gestützte Altersprüfung">
+        <p>
+          Vela ist nur für Erwachsene. Zum Schutz Minderjähriger prüft ein KI-Sprachmodell automatisch Texte, die
+          du selbst schreibst: deine Profilantworten beim Speichern, stichprobenartig deine Chatnachrichten und
+          deine Texte, wenn dich jemand als „Minderjährig“ meldet. Das Modell schätzt nur, wie wahrscheinlich es
+          ist, dass du jünger als 18 bist, und nennt kurze Gründe. Fotos und Ausweise werden nie an die KI
+          geschickt.
+        </p>
+        <p>
+          Liegt die Schätzung über einem festgelegten Schwellenwert, wird dein Konto automatisch gesperrt. Das ist
+          eine automatisierte Entscheidung im Sinne von Art. 22 DSGVO. Sie ist zum Schutz Minderjähriger und zur
+          Durchführung des Nutzungsvertrags (nur ab 18) erforderlich (Art. 22 Abs. 2 lit. a DSGVO). Du hast das
+          Recht auf Überprüfung durch einen Menschen, auf Darlegung deines Standpunkts und auf Anfechtung der
+          Entscheidung: Lade dazu einen Ausweis hoch (Punkt 7) oder schreib an {OPERATOR.email}.
+        </p>
+        <p>
+          Rechtsgrundlage: berechtigtes Interesse am Schutz Minderjähriger und an einer Plattform nur für
+          Erwachsene (Art. 6 Abs. 1 lit. f DSGVO) sowie Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO). Das
+          Ergebnis (Wahrscheinlichkeit, Gründe, Modell, Zeitpunkt, Maßnahme) speichern wir als Prüfprotokoll.
+        </p>
+      </Section>
+
+      <Section title="7. Ausweisprüfung nach einer Sperre">
+        <p>
+          Wurdest du wegen des Alters gesperrt, kannst du ein Foto eines amtlichen Ausweises hochladen. Das Bild
+          wird im Browser neu kodiert (dabei werden Metadaten wie Standort entfernt), nur in unserer Datenbank
+          gespeichert und ist ausschließlich für den Betreiber sichtbar, nie für andere Nutzerinnen und Nutzer und
+          nie über einen öffentlichen Link. Wir prüfen nur dein Geburtsdatum; du darfst alle anderen Angaben außer
+          Foto und Name abdecken.
+        </p>
+        <p>
+          Das Ausweisbild wird sofort gelöscht, sobald wir entschieden haben (Freigabe oder Ablehnung), spätestens
+          aber nach 30 Tagen. Gespeichert bleibt nur, dass und wann eine Prüfung stattfand und wie sie ausging.
+          Rechtsgrundlage: Art. 6 Abs. 1 lit. b und f DSGVO; der Upload ist freiwillig.
+        </p>
+      </Section>
+
+      <Section title="8. Speicherung im Browser">
         <p>
           Im Browser speichern wir nur technisch notwendige Daten: das Sitzungs-Cookie bzw. -Token und
           lokale Einstellungen (z. B. welche Nachrichten du gesehen hast). Wir verwenden keine Tracking-
@@ -73,32 +110,38 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="7. Hosting und Empfänger">
+      <Section title="9. Hosting und Empfänger">
         <p>
           Die App wird bei Vercel Inc. (USA) gehostet; die Datenbank liegt bei {OPERATOR.database}.
           Diese Anbieter verarbeiten Daten in unserem Auftrag (Art. 28 DSGVO). Bei Übermittlungen in die
           USA stützen wir uns auf das EU-US Data Privacy Framework bzw. Standardvertragsklauseln. Für die
-          Anmeldung werden Daten an xAI, Google bzw. X übermittelt (siehe Punkt 2). Eine Weitergabe an
+          Anmeldung werden Daten an xAI, Google bzw. X übermittelt (siehe Punkt 2). Für die Altersprüfung
+          (Punkt 6) senden wir ausschließlich Texte an den KI-Anbieter xAI (X.AI LLC, USA) als
+          Auftragsverarbeiter; die Texte werden nur für diese Prüfung verwendet. Eine Weitergabe an
           sonstige Dritte oder ein Verkauf deiner Daten findet nicht statt.
         </p>
       </Section>
 
-      <Section title="8. Speicherdauer">
+      <Section title="10. Speicherdauer">
         <p>
           Profil, Swipes, Matches und Nachrichten speichern wir, solange dein Profil besteht. Löschst du
           dein Profil (Ich → „Profil löschen“), werden Profil, Foto, Swipes, deine Blockierungen und alle
           Nachrichten, an denen du beteiligt warst, sofort gelöscht. Meldungen bewahren wir zum Schutz
           anderer bis zu [Frist, z. B. 12 Monate] auf. Dein Anmeldekonto löschen wir auf Anfrage an{" "}
-          {OPERATOR.email} vollständig. Server-Protokolle des Hosters werden nach kurzer Zeit automatisch
-          gelöscht.
+          {OPERATOR.email} vollständig. Ausweisbilder löschen wir nach der Entscheidung, spätestens nach
+          30 Tagen. Das Prüfprotokoll der Altersprüfung und das Ergebnis einer Ausweisprüfung bewahren wir auf,
+          solange eine Sperre besteht, und danach bis zu [Frist, z. B. 12 Monate], damit eine Sperre nicht durch
+          Löschen und Neuanlegen des Profils umgangen werden kann. Server-Protokolle des Hosters werden nach
+          kurzer Zeit automatisch gelöscht.
         </p>
       </Section>
 
-      <Section title="9. Deine Rechte">
+      <Section title="11. Deine Rechte">
         <p>
           Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17),
           Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch
-          (Art. 21 DSGVO). Eine erteilte Einwilligung kannst du jederzeit mit Wirkung für die Zukunft
+          (Art. 21 DSGVO) sowie das Recht, nicht ausschließlich einer automatisierten Entscheidung unterworfen
+          zu werden (Art. 22 DSGVO, siehe Punkt 6). Eine erteilte Einwilligung kannst du jederzeit mit Wirkung für die Zukunft
           widerrufen. Schreib dazu an {OPERATOR.email}.
         </p>
         <p>
@@ -107,7 +150,7 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="10. Open Source">
+      <Section title="12. Open Source">
         <p>
           Der Code von Vela ist öffentlich (github.com/TAesthetics/vela). Du kannst nachlesen, welche Daten
           gespeichert werden und wie der Schleier funktioniert.

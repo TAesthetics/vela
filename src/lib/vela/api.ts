@@ -3,6 +3,7 @@ import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import {
   FREE_SWIPES,
+  emptySnapshot,
   ORBITS,
   PROMPT_BANK,
   REPORT_REASONS,
@@ -27,6 +28,7 @@ type ProfileRow = {
   prompts: unknown;
   photo: string | null;
   plus: boolean | string;
+  status?: string;
   sparked_you?: boolean | string;
 };
 
@@ -127,13 +129,74 @@ async function plusAvailable() {
   return isWorkspacePreview();
 }
 
+function ageCheck() {
+  // Server-only module, loaded lazily so it never reaches the client bundle.
+  return import("@/lib/vela/age-check.server");
+}
+
+/** The person's own profile status ('active' when there is no profile yet). */
+async function statusOf(sql: Sql, userId: string) {
+  const rows = await sql<{ status: string }>`select status from vela_profiles where user_id = ${userId}`;
+  return rows[0]?.status ?? "active";
+}
+
+/** Rejects actions by suspended people and toward suspended/blocked people. */
+async function canInteract(sql: Sql, me: string, other: string) {
+  if ((await statusOf(sql, me)) !== "active") return false;
+  if ((await statusOf(sql, other)) !== "active") return false;
+  return !(await isBlocked(sql, me, other));
+}
+
+/** True once the operator approved an ID for this person (AI checks stop). */
+async function ageVerified(sql: Sql, userId: string) {
+  const rows = await sql`
+    select 1 from vela_id_checks where user_id = ${userId} and status = 'approved' limit 1
+  `;
+  return rows.length > 0;
+}
+
+/**
+ * A suspension survives deleting and re-creating the profile: it stays open
+ * until an ID check after the latest suspension flag was approved.
+ */
+async function openAgeSuspension(sql: Sql, userId: string) {
+  const rows = await sql`
+    select 1 from vela_age_flags f
+    where f.user_id = ${userId} and f.action = 'suspended'
+      and not exists (
+        select 1 from vela_id_checks c
+        where c.user_id = f.user_id and c.status = 'approved' and c.decided_at > f.created_at
+      )
+    limit 1
+  `;
+  return rows.length > 0;
+}
+
+async function suspensionSnapshot(sql: Sql, userId: string): Promise<Snapshot> {
+  const checks = await sql<{ status: string }>`
+    select status from vela_id_checks where user_id = ${userId}
+    order by created_at desc limit 1
+  `;
+  const status = checks[0]?.status;
+  const idCheck =
+    status === "pending" || status === "approved" || status === "rejected" || status === "expired"
+      ? status
+      : "none";
+  return {
+    ...emptySnapshot(),
+    suspension: { reason: "age", idCheck },
+  };
+}
+
 async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
   const day = berlinDay();
   const mine = await sql<ProfileRow>`
-    select user_id, name, age, city, orbit, values, prompts, photo, plus
+    select user_id, name, age, city, orbit, values, prompts, photo, plus, status
     from vela_profiles where user_id = ${userId}
   `;
   const meRow = mine[0];
+  // Suspended people see only the suspension screen — nothing about others.
+  if (meRow && meRow.status !== "active") return suspensionSnapshot(sql, userId);
   const plus = meRow ? asBool(meRow.plus) : false;
   const usedRows = await sql<{ n: number }>`
     select count(*) as n from vela_swipes
@@ -149,6 +212,7 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
   const otherRows = await sql<{ n: number }>`
     select count(*) as n from vela_profiles p
     where p.user_id <> ${userId}
+      and p.status = 'active'
       and not exists (
         select 1 from vela_blocks b
         where (b.from_user = ${userId} and b.to_user = p.user_id)
@@ -163,6 +227,7 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
       ) as sparked_you
     from vela_profiles p
     where p.user_id <> ${userId}
+      and p.status = 'active'
       and not exists (
         select 1 from vela_swipes s where s.from_user = ${userId} and s.to_user = p.user_id
       )
@@ -184,6 +249,7 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
      and theirs.direction = 'spark'
     join vela_profiles p on p.user_id = mine.to_user
     where mine.from_user = ${userId} and mine.direction = 'spark'
+      and p.status = 'active'
       and not exists (
         select 1 from vela_blocks b
         where (b.from_user = ${userId} and b.to_user = p.user_id)
@@ -236,6 +302,7 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
 
   return {
     me: meRow ? toMe(meRow) : null,
+    suspension: null,
     plus,
     plusAvailable: await plusAvailable(),
     swipesLeft: plus ? null : Math.max(0, FREE_SWIPES - used),
@@ -304,6 +371,8 @@ export const loadVela = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
+    // Opportunistic retention: ID images never outlive 30 days.
+    await (await ageCheck()).purgeOldIdImages(sql);
     return snapshot(sql, context.userId);
   });
 
@@ -315,9 +384,12 @@ export const saveProfile = createServerFn({ method: "POST" })
     if ("error" in parsed) return { error: parsed.error, snapshot: null };
     const sql = await getSql();
     const me = parsed.me;
+    // A suspended person can't edit their way out, and a deleted + re-created
+    // profile starts suspended while an age suspension is still open.
+    const suspended = (await statusOf(sql, context.userId)) !== "active" || (await openAgeSuspension(sql, context.userId));
     await sql.query(
-      `insert into vela_profiles (user_id, name, age, city, orbit, values, prompts, photo)
-       values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
+      `insert into vela_profiles (user_id, name, age, city, orbit, values, prompts, photo, status)
+       values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
        on conflict (user_id) do update set
          name = excluded.name,
          age = excluded.age,
@@ -335,8 +407,12 @@ export const saveProfile = createServerFn({ method: "POST" })
         JSON.stringify(me.values),
         JSON.stringify(me.prompts),
         me.photo,
+        suspended ? "suspended_age" : "active",
       ],
     );
+    if (!suspended && !(await ageVerified(sql, context.userId))) {
+      await (await ageCheck()).runAgeCheck(sql, context.userId, "profile");
+    }
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
@@ -359,7 +435,7 @@ export const swipe = createServerFn({ method: "POST" })
       from vela_profiles where user_id = ${toUser}
     `;
     if (!target[0]) return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
-    if (await isBlocked(sql, context.userId, toUser)) {
+    if (!(await canInteract(sql, context.userId, toUser))) {
       return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
     }
     const existing = await sql<{ direction: string }>`
@@ -464,7 +540,7 @@ export const sendMessage = createServerFn({ method: "POST" })
     if (mutual.length === 0) {
       return { error: "Noch kein Gespräch.", snapshot: await snapshot(sql, context.userId) };
     }
-    if (await isBlocked(sql, context.userId, toUser)) {
+    if (!(await canInteract(sql, context.userId, toUser))) {
       return { error: "Dieses Gespräch ist beendet.", snapshot: await snapshot(sql, context.userId) };
     }
     const [pairA, pairB] = pairOf(context.userId, toUser);
@@ -472,6 +548,14 @@ export const sendMessage = createServerFn({ method: "POST" })
       insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
       values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${text}, 'message')
     `;
+    // Sampled AI age check on the sender's own messages: 1st, 5th, then every 20th.
+    const sentRows = await sql<{ n: number }>`
+      select count(*) as n from vela_messages where from_user = ${context.userId} and kind = 'message'
+    `;
+    const sent = Number(sentRows[0]?.n ?? 0);
+    if ((sent === 1 || sent === 5 || sent % 20 === 0) && !(await ageVerified(sql, context.userId))) {
+      await (await ageCheck()).runAgeCheck(sql, context.userId, "message");
+    }
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
@@ -527,6 +611,12 @@ export const reportUser = createServerFn({ method: "POST" })
     `;
     // Reporting always blocks, so the reporter never sees this person again.
     await insertBlock(sql, context.userId, toUser);
+    if (reason === "minor" && !(await ageVerified(sql, toUser))) {
+      // Always queue for human review; the AI may additionally suspend right away.
+      const age = await ageCheck();
+      const suspended = await age.runAgeCheck(sql, toUser, "report");
+      if (!suspended) await age.recordFlag(sql, toUser, "report", "review", null, ["Gemeldet: Minderjährig"]);
+    }
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
@@ -538,6 +628,54 @@ export const deleteProfile = createServerFn({ method: "POST" })
     await sql`delete from vela_messages where pair_a = ${id} or pair_b = ${id}`;
     await sql`delete from vela_swipes where from_user = ${id} or to_user = ${id}`;
     await sql`delete from vela_blocks where from_user = ${id}`;
+    await sql`
+      update vela_id_checks
+      set image = null, status = case when status = 'pending' then 'expired' else status end
+      where user_id = ${id} and image is not null
+    `;
     await sql`delete from vela_profiles where user_id = ${id}`;
     return snapshot(sql, context.userId);
+  });
+
+/** Max decoded size of an ID image (after client-side re-encode to JPEG). */
+const ID_MAX_BYTES = 1_500_000;
+
+/**
+ * Upload an ID document to lift an age suspension. Only for suspended people,
+ * one pending check at a time. Stored privately in the database (never a URL),
+ * visible only to the operator, deleted once they decide or after 30 days.
+ */
+export const uploadIdDocument = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { image?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    if ((await statusOf(sql, context.userId)) === "active") {
+      return { error: "Dein Konto ist nicht gesperrt.", snapshot: await snapshot(sql, context.userId) };
+    }
+    const image = String(data?.image ?? "");
+    const prefix = "data:image/jpeg;base64,";
+    if (!image.startsWith(prefix)) {
+      return { error: "Bitte ein Foto deines Ausweises (JPEG).", snapshot: await snapshot(sql, context.userId) };
+    }
+    const base64 = image.slice(prefix.length);
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
+      return { error: "Das Bild ist beschädigt.", snapshot: await snapshot(sql, context.userId) };
+    }
+    const bytes = Buffer.from(base64, "base64");
+    // JPEG magic bytes — the client re-encodes every upload through a canvas.
+    if (bytes.length > ID_MAX_BYTES || bytes.length < 1000 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
+      return { error: "Das Bild ist zu groß oder kein JPEG.", snapshot: await snapshot(sql, context.userId) };
+    }
+    const pending = await sql`
+      select 1 from vela_id_checks where user_id = ${context.userId} and status = 'pending' limit 1
+    `;
+    if (pending.length > 0) {
+      return { error: "Dein Ausweis wird schon geprüft.", snapshot: await snapshot(sql, context.userId) };
+    }
+    await sql`
+      insert into vela_id_checks (id, user_id, image, status)
+      values (${crypto.randomUUID()}, ${context.userId}, ${bytes.toString("base64")}, 'pending')
+    `;
+    return { error: null, snapshot: await snapshot(sql, context.userId) };
   });

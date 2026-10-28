@@ -6,6 +6,7 @@ import { Onboarding } from "@/components/vela/onboarding";
 import { Discover } from "@/components/vela/discover";
 import { Celebrate, Chat, MeScreen, Nav, PersonView, Plus, Signals } from "@/components/vela/flows";
 import { SignInPanel } from "@/components/vela/signin";
+import { Suspended } from "@/components/vela/suspended";
 
 type Tab = "discover" | "signals" | "me";
 type Screen =
@@ -45,6 +46,7 @@ export function VelaApp() {
 function Authed() {
   const ready = useVela((state) => state.ready);
   const me = useVela((state) => state.me);
+  const suspension = useVela((state) => state.suspension);
   const toast = useVela((state) => state.toast);
   const clearToast = useVela((state) => state.clearToast);
   const celebrate = useVela((state) => state.celebrate);
@@ -67,6 +69,14 @@ function Authed() {
   }, [toast, clearToast]);
 
   if (!ready) return <Veil />;
+
+  if (suspension) {
+    return (
+      <Frame overlay={toast ? <div role="status" className="pointer-events-none absolute inset-x-5 top-5 z-50 rounded-full bg-paper px-4 py-3 text-center text-sm text-ink">{toast}</div> : null}>
+        <Suspended suspension={suspension} />
+      </Frame>
+    );
+  }
 
   if (!me?.onboarded) {
     return (

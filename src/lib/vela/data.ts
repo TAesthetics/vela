@@ -43,8 +43,14 @@ export type Thread = {
   messages: Message[];
 };
 
+export type IdCheckStatus = "none" | "pending" | "approved" | "rejected" | "expired";
+
+/** Set when the signed-in person is suspended for a suspected age < 18. */
+export type Suspension = { reason: "age"; idCheck: IdCheckStatus };
+
 export type Snapshot = {
   me: Me | null;
+  suspension: Suspension | null;
   plus: boolean;
   /** False until a real checkout exists outside the workspace preview. */
   plusAvailable: boolean;
@@ -158,6 +164,7 @@ export function blankMe(): Me {
 export function emptySnapshot(): Snapshot {
   return {
     me: null,
+    suspension: null,
     plus: false,
     plusAvailable: false,
     swipesLeft: FREE_SWIPES,
