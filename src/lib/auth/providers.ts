@@ -25,7 +25,21 @@ export type GrokProvider = {
   label: string;
 };
 
-export const GROK_PROVIDERS: readonly GrokProvider[] = [
+const ALL_PROVIDERS: readonly GrokProvider[] = [
   { providerId: "grok-google", idp: "google", label: "Google" },
   { providerId: "grok-x", idp: "twitter", label: "X" },
 ];
+
+/**
+ * Optional build-time filter for the sign-in buttons, e.g. `VITE_AUTH_PROVIDERS=google`
+ * on a self-hosted deploy that only has Google credentials ("google", "x").
+ * Unset = all providers (the Grok platform default).
+ */
+const wanted = String(import.meta.env?.VITE_AUTH_PROVIDERS ?? "")
+  .split(",")
+  .map((item) => item.trim().toLowerCase())
+  .filter(Boolean);
+
+export const GROK_PROVIDERS: readonly GrokProvider[] = wanted.length
+  ? ALL_PROVIDERS.filter((p) => wanted.includes(p.providerId.replace(/^grok-/, "")))
+  : ALL_PROVIDERS;

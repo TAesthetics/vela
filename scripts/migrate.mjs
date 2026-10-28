@@ -19,6 +19,13 @@ import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
+// Railway: the private database network isn't reachable while building, so
+// the build skips here and `npm start` (scripts/start.mjs) migrates instead.
+const railway = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
+if (railway && process.env.VELA_MIGRATE_AT_START !== "1") {
+  console.log("[migrate] Railway build — migrations run at start (npm start).");
+  process.exit(0);
+}
 if (!databaseUrl) {
   console.log(
     "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",

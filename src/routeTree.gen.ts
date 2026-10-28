@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DatenschutzRouteImport } from './routes/datenschutz'
+import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as ImpressumRouteImport } from './routes/impressum'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminAgeRouteImport } from './routes/admin/age'
@@ -24,6 +25,11 @@ const IndexRoute = IndexRouteImport.update({
 const DatenschutzRoute = DatenschutzRouteImport.update({
   id: '/datenschutz',
   path: '/datenschutz',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealthzRoute = HealthzRouteImport.update({
+  id: '/healthz',
+  path: '/healthz',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ImpressumRoute = ImpressumRouteImport.update({
@@ -50,6 +56,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/datenschutz': typeof DatenschutzRoute
+  '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
   '/admin/age': typeof AdminAgeRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/datenschutz': typeof DatenschutzRoute
+  '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
   '/admin/age': typeof AdminAgeRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/datenschutz': typeof DatenschutzRoute
+  '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
   '/admin/age': typeof AdminAgeRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/datenschutz'
+    | '/healthz'
     | '/impressum'
     | '/login'
     | '/admin/age'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/datenschutz'
+    | '/healthz'
     | '/impressum'
     | '/login'
     | '/admin/age'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/datenschutz'
+    | '/healthz'
     | '/impressum'
     | '/login'
     | '/admin/age'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DatenschutzRoute: typeof DatenschutzRoute
+  HealthzRoute: typeof HealthzRoute
   ImpressumRoute: typeof ImpressumRoute
   LoginRoute: typeof LoginRoute
   AdminAgeRoute: typeof AdminAgeRoute
@@ -122,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/datenschutz'
       fullPath: '/datenschutz'
       preLoaderRoute: typeof DatenschutzRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/healthz': {
+      id: '/healthz'
+      path: '/healthz'
+      fullPath: '/healthz'
+      preLoaderRoute: typeof HealthzRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/impressum': {
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DatenschutzRoute: DatenschutzRoute,
+  HealthzRoute: HealthzRoute,
   ImpressumRoute: ImpressumRoute,
   LoginRoute: LoginRoute,
   AdminAgeRoute: AdminAgeRoute,

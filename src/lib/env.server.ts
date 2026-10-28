@@ -10,5 +10,25 @@ export function env(key: string): string | undefined {
  * key off this predicate.
  */
 export function isWorkspacePreview(): boolean {
-  return !env("GROK_PROJECT_ID");
+  return !env("GROK_PROJECT_ID") && !isSelfHosted();
+}
+
+/**
+ * Self-hosted deployment outside the Grok platform (e.g. Railway). Railway sets
+ * RAILWAY_ENVIRONMENT_NAME on every service; VELA_SELF_HOSTED=1 forces it
+ * elsewhere. Self-hosted apps use their own Google/X OAuth credentials instead
+ * of the Grok auth broker (see `auth/server.ts` and docs/RAILWAY.md).
+ */
+export function isSelfHosted(): boolean {
+  return Boolean(
+    env("RAILWAY_ENVIRONMENT_NAME") || env("RAILWAY_ENVIRONMENT") || env("VELA_SELF_HOSTED"),
+  );
+}
+
+/** Public https origin of a self-hosted app: BETTER_AUTH_URL, else Railway's generated domain. */
+export function selfHostedPublicUrl(): string | undefined {
+  const explicit = env("BETTER_AUTH_URL");
+  if (explicit) return explicit.replace(/\/+$/, "");
+  const railway = env("RAILWAY_PUBLIC_DOMAIN");
+  return railway ? `https://${railway}` : undefined;
 }
