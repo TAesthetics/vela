@@ -1,6 +1,19 @@
 import { create } from "zustand";
-import { blockUser, deleteProfile, loadVela, reportUser, uploadIdDocument, saveProfile, sendMessage, setPlus, swipe, undoPass } from "@/lib/vela/api";
-import { emptySnapshot, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
+import {
+  blockUser,
+  deleteProfile,
+  loadVela,
+  openPlusPortal,
+  reportUser,
+  startPlusCheckout,
+  uploadIdDocument,
+  saveProfile,
+  sendMessage,
+  setPlus,
+  swipe,
+  undoPass,
+} from "@/lib/vela/api";
+import { emptySnapshot, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
 export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip";
 
@@ -10,6 +23,7 @@ type VelaStore = {
   suspension: Suspension | null;
   plus: boolean;
   plusAvailable: boolean;
+  billing: Billing;
   swipesLeft: number | null;
   lastPassId: string | null;
   others: number;
@@ -29,6 +43,9 @@ type VelaStore = {
   spark: (personId: string, promptId: string, note: string) => Promise<SparkResult>;
   send: (personId: string, text: string) => Promise<void>;
   unlockPlus: () => Promise<void>;
+  /** Opens Stripe Checkout (or the billing portal). Resolves with an error text, null when redirecting. */
+  checkoutPlus: () => Promise<string | null>;
+  managePlus: () => Promise<string | null>;
   block: (personId: string) => Promise<boolean>;
   uploadId: (image: string) => Promise<string | null>;
   report: (personId: string, reason: string, details: string) => Promise<boolean>;
@@ -61,6 +78,7 @@ function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
     suspension: snapshot.suspension,
     plus: snapshot.plus,
     plusAvailable: snapshot.plusAvailable,
+    billing: snapshot.billing,
     swipesLeft: snapshot.swipesLeft,
     lastPassId: snapshot.lastPassId,
     others: snapshot.others,
@@ -129,6 +147,36 @@ export const useVela = create<VelaStore>((set, get) => ({
     const toast = result.error ?? (result.snapshot.plus ? "Vela+ ist an." : "Leg zuerst dein Profil an.");
     set(apply(result.snapshot, { toast }));
   },
+  checkoutPlus: async () => {
+    try {
+      const result = await startPlusCheckout();
+      if (result.url) {
+        window.location.assign(result.url);
+        return null;
+      }
+      set({ toast: result.error });
+      return result.error;
+    } catch {
+      const error = "Die Bezahlseite ließ sich nicht öffnen.";
+      set({ toast: error });
+      return error;
+    }
+  },
+  managePlus: async () => {
+    try {
+      const result = await openPlusPortal();
+      if (result.url) {
+        window.location.assign(result.url);
+        return null;
+      }
+      set({ toast: result.error });
+      return result.error;
+    } catch {
+      const error = "Die Abo-Verwaltung ließ sich nicht öffnen.";
+      set({ toast: error });
+      return error;
+    }
+  },
   uploadId: async (image) => {
     const result = await uploadIdDocument({ data: { image } });
     set(apply(result.snapshot, { toast: result.error ?? "Danke. Wir prüfen deinen Ausweis." }));
@@ -149,7 +197,13 @@ export const useVela = create<VelaStore>((set, get) => ({
     return !result.error;
   },
   removeProfile: async () => {
-    const snapshot = await deleteProfile();
+    let snapshot;
+    try {
+      snapshot = await deleteProfile();
+    } catch (err) {
+      set({ toast: err instanceof Error && err.message ? err.message : "Löschen ging gerade nicht." });
+      return;
+    }
     set(apply(snapshot, { celebrate: null, toast: null, frontId: null }));
     // The login is gone too (DSGVO Art. 17): drop the local session and start over.
     const { forgetLocalSession } = await import("@/lib/auth/client");

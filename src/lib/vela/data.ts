@@ -50,12 +50,27 @@ export type IdCheckStatus = "none" | "pending" | "approved" | "rejected" | "expi
 /** Set when the signed-in person is suspended for a suspected age < 18. */
 export type Suspension = { reason: "age"; idCheck: IdCheckStatus };
 
+/** VELA+ subscription state (Stripe). */
+export type Billing = {
+  /** False while STRIPE_SECRET_KEY is missing: "Zahlungen sind noch nicht eingerichtet". */
+  configured: boolean;
+  /** True once Stripe knows this person (then "Abo verwalten" works). */
+  customer: boolean;
+  status: string | null;
+  /** Epoch ms of the end of the paid period. */
+  periodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+};
+
+export const PLUS_PRICE_LABEL = "10 €";
+
 export type Snapshot = {
   me: Me | null;
   suspension: Suspension | null;
   plus: boolean;
-  /** False until a real checkout exists outside the workspace preview. */
+  /** Free unlock button, only in the workspace preview (no payment there). */
   plusAvailable: boolean;
+  billing: Billing;
   swipesLeft: number | null;
   lastPassId: string | null;
   others: number;
@@ -170,6 +185,7 @@ export function emptySnapshot(): Snapshot {
     suspension: null,
     plus: false,
     plusAvailable: false,
+    billing: { configured: false, customer: false, status: null, periodEnd: null, cancelAtPeriodEnd: false },
     swipesLeft: FREE_SWIPES,
     lastPassId: null,
     others: 0,

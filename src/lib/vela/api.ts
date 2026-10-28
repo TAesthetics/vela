@@ -14,6 +14,7 @@ import {
   type Orbit,
   type Person,
   type Prompt,
+  type Billing,
   type Snapshot,
   type Thread,
 } from "@/lib/vela/data";
@@ -129,6 +130,38 @@ async function plusAvailable() {
   // Server-only import, kept out of the client bundle.
   const { isWorkspacePreview } = await import("@/lib/env.server");
   return isWorkspacePreview();
+}
+
+function billingServer() {
+  // Server-only module (Stripe key), loaded lazily so it never reaches the client bundle.
+  return import("@/lib/vela/stripe.server");
+}
+
+async function billingSnapshot(sql: Sql, userId: string): Promise<Billing> {
+  const stripe = await billingServer();
+  const row = await stripe.billingOf(sql, userId);
+  const end = row?.current_period_end ? new Date(row.current_period_end).getTime() : null;
+  return {
+    configured: stripe.stripeConfigured(),
+    customer: Boolean(row?.stripe_customer_id),
+    status: row?.status ?? null,
+    periodEnd: end && Number.isFinite(end) ? end : null,
+    cancelAtPeriodEnd: row ? asBool(row.cancel_at_period_end) : false,
+  };
+}
+
+/** Public https origin for Stripe return URLs. */
+async function appOrigin() {
+  const { selfHostedPublicUrl } = await import("@/lib/env.server");
+  const { getRequest } = await import("@tanstack/react-start/server");
+  const request = getRequest();
+  if (request) {
+    const url = new URL(request.url);
+    const host = request.headers.get("x-forwarded-host") ?? url.host;
+    const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+    if (host) return `${proto}://${host}`;
+  }
+  return selfHostedPublicUrl() ?? "";
 }
 
 function ageReview() {
@@ -307,6 +340,7 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
     suspension: null,
     plus,
     plusAvailable: await plusAvailable(),
+    billing: await billingSnapshot(sql, userId),
     swipesLeft: plus ? null : Math.max(0, FREE_SWIPES - used),
     lastPassId: lastRows[0]?.to_user ?? null,
     others: Number(otherRows[0]?.n ?? 0),
@@ -419,6 +453,8 @@ export const saveProfile = createServerFn({ method: "POST" })
         suspended ? "suspended_age" : "active",
       ],
     );
+    // Paid before the profile existed (or re-created it): carry VELA+ over.
+    await (await billingServer()).syncPlus(sql, context.userId);
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
@@ -569,6 +605,47 @@ export const setPlus = createServerFn({ method: "POST" })
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
+/** VELA+: start Stripe Checkout (card, Apple Pay, Google Pay). Returns the URL to open. */
+export const startPlusCheckout = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{ url: string | null; error: string | null }> => {
+    const stripe = await billingServer();
+    if (!stripe.stripeConfigured()) return { url: null, error: "Zahlungen sind noch nicht eingerichtet." };
+    const sql = await getSql();
+    if ((await statusOf(sql, context.userId)) !== "active") return { url: null, error: "Das geht gerade nicht." };
+    const profile = await sql`select 1 from vela_profiles where user_id = ${context.userId}`;
+    if (profile.length === 0) return { url: null, error: "Leg zuerst dein Profil an." };
+    const current = await stripe.billingOf(sql, context.userId);
+    if (current && stripe.isActiveStatus(current.status)) return { url: null, error: "Vela+ ist schon aktiv." };
+    const users = await sql<{ email: string | null }>`select email from "user" where id = ${context.userId}`;
+    try {
+      const url = await stripe.createCheckout(
+        sql,
+        { id: context.userId, email: users[0]?.email ?? null },
+        await appOrigin(),
+      );
+      return { url, error: null };
+    } catch {
+      return { url: null, error: "Die Bezahlseite ließ sich nicht öffnen. Versuch es gleich nochmal." };
+    }
+  });
+
+/** VELA+: Stripe billing portal to cancel, change the payment method or get invoices. */
+export const openPlusPortal = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{ url: string | null; error: string | null }> => {
+    const stripe = await billingServer();
+    if (!stripe.stripeConfigured()) return { url: null, error: "Zahlungen sind noch nicht eingerichtet." };
+    const sql = await getSql();
+    const current = await stripe.billingOf(sql, context.userId);
+    if (!current?.stripe_customer_id) return { url: null, error: "Du hast noch kein Abo." };
+    try {
+      return { url: await stripe.createPortal(current.stripe_customer_id, await appOrigin()), error: null };
+    } catch {
+      return { url: null, error: "Die Abo-Verwaltung ließ sich nicht öffnen. Versuch es gleich nochmal." };
+    }
+  });
+
 async function insertBlock(sql: Sql, from: string, to: string) {
   await sql`
     insert into vela_blocks (from_user, to_user) values (${from}, ${to})
@@ -621,6 +698,23 @@ export const deleteProfile = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const sql = await getSql();
     const id = context.userId;
+    // A running VELA+ subscription must not keep billing a deleted account:
+    // cancel it at Stripe first; if that fails, stop before deleting anything.
+    const stripe = await billingServer();
+    const billing = await stripe.billingOf(sql, id);
+    if (billing?.stripe_subscription_id && billing.status !== "canceled" && billing.status !== "incomplete_expired") {
+      try {
+        await stripe.cancelNow(billing.stripe_subscription_id);
+      } catch (err) {
+        const gone = err instanceof Error && /No such subscription|canceled/i.test(err.message);
+        if (!gone) {
+          throw new Error(
+            "Dein VELA+ Abo ließ sich gerade nicht beenden. Kündige es unter „Abo verwalten“ und lösch dein Konto dann nochmal.",
+          );
+        }
+      }
+    }
+    await sql`delete from vela_subscriptions where user_id = ${id}`;
     // An open age suspension must not be dodged by deleting and signing in
     // again: keep only a keyed hash of the login identity (max. 12 months).
     if (await openAgeSuspension(sql, id)) await (await ageReview()).rememberSuspendedIdentity(sql, id);

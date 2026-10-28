@@ -62,6 +62,27 @@ function Authed() {
     void load().catch(() => undefined);
   }, [load]);
 
+  // Back from Stripe Checkout / billing portal (?plus=success|cancel|portal).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const result = url.searchParams.get("plus");
+    if (!result) return;
+    url.searchParams.delete("plus");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    setScreen({ name: "plus" });
+    if (result === "success") {
+      useVela.setState({ toast: "Danke! Vela+ wird gleich aktiv." });
+      // The webhook usually lands within seconds; reload a few times to pick it up.
+      const timers = [2000, 5000, 10000].map((ms) =>
+        window.setTimeout(() => void load().catch(() => undefined), ms),
+      );
+      return () => timers.forEach((timer) => window.clearTimeout(timer));
+    }
+    if (result === "cancel") useVela.setState({ toast: "Kein Problem, es wurde nichts abgebucht." });
+    if (result === "portal") void load().catch(() => undefined);
+  }, [load]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => clearToast(), 2600);
