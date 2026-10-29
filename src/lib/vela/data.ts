@@ -140,10 +140,19 @@ export function orbitLabel(id: Orbit) {
   return ORBITS.find((orbit) => orbit.id === id)?.label ?? id;
 }
 
+// Resonanz is a fixed, public formula (no AI, no hidden ranking):
+// 48 base + 14 per shared value + 26 for the same orbit (otherwise 6), clamped to 46–96.
+export const RESONANCE = { base: 48, perValue: 14, sameOrbit: 26, otherOrbit: 6, min: 46, max: 96 } as const;
+
+export function resonanceParts(me: { orbit: Orbit; values: string[] }, person: { orbit: Orbit; values: string[] }) {
+  const sharedValues = person.values.filter((value) => me.values.includes(value));
+  const sameOrbit = me.orbit === person.orbit;
+  const raw = RESONANCE.base + sharedValues.length * RESONANCE.perValue + (sameOrbit ? RESONANCE.sameOrbit : RESONANCE.otherOrbit);
+  return { sharedValues, sameOrbit, raw, score: Math.max(RESONANCE.min, Math.min(RESONANCE.max, raw)) };
+}
+
 export function resonance(me: { orbit: Orbit; values: string[] }, person: { orbit: Orbit; values: string[] }) {
-  const shared = person.values.filter((value) => me.values.includes(value)).length;
-  const orbit = me.orbit === person.orbit ? 26 : 6;
-  return Math.max(46, Math.min(96, 48 + shared * 14 + orbit));
+  return resonanceParts(me, person).score;
 }
 
 export function formatTime(at: number) {

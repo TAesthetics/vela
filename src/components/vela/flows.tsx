@@ -8,7 +8,8 @@ import {
   PLUS_PRICE_LABEL,
   formatTime,
   orbitLabel,
-  resonance,
+  RESONANCE,
+  resonanceParts,
   type Orbit,
 } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
@@ -269,7 +270,8 @@ export function PersonView({
       </div>
     );
   }
-  const score = resonance(me, person);
+  const parts = resonanceParts(me, person);
+  const score = parts.score;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 px-2 pt-2">
@@ -288,6 +290,22 @@ export function PersonView({
           {person.city} · {orbitLabel(person.orbit)} · Resonanz {score}
         </p>
         <p className="mt-3 text-sm text-muted">{person.values.join(" · ")}</p>
+        <details className="mt-4 rounded-2xl bg-surface px-4 py-3 text-sm text-muted">
+          <summary className="cursor-pointer text-paper">So entsteht die Resonanz {score}</summary>
+          <p className="mt-2">
+            {RESONANCE.base} Basis + {parts.sharedValues.length} gemeinsame{" "}
+            {parts.sharedValues.length === 1 ? "Wert" : "Werte"} × {RESONANCE.perValue} +{" "}
+            {parts.sameOrbit ? `${RESONANCE.sameOrbit} (gleicher Orbit)` : `${RESONANCE.otherOrbit} (anderer Orbit)`} ={" "}
+            {parts.raw}
+            {parts.raw !== score ? `, begrenzt auf ${RESONANCE.min}–${RESONANCE.max}: ${score}` : ""}.
+          </p>
+          {parts.sharedValues.length > 0 ? (
+            <p className="mt-1">Gemeinsam: {parts.sharedValues.join(" · ")}</p>
+          ) : null}
+          <p className="mt-2 text-faint">
+            Eine feste, offene Formel für alle. Keine KI, Fotos zählen nicht. Der Code ist öffentlich.
+          </p>
+        </details>
         <div className="mt-6 grid gap-3">
           {person.prompts.map((prompt) => (
             <div key={prompt.id} className="rounded-2xl bg-surface p-4">

@@ -11,6 +11,16 @@ VELA ist eine Open-Source-Dating-App gegen oberflächliches Swipen. Profilbilder
 - **Ohne KI:** Keine Algorithmen, die dich bewerten. Menschen lesen Sätze, nicht Scores.
 - **Datenschutz zuerst:** Transparent statt Blackbox.
 
+## So entsteht die Resonanz
+
+Die Prozentzahl „Resonanz“ auf jeder Karte ist eine feste, offene Formel, ohne KI:
+
+```
+Resonanz = 48 + 14 × (gemeinsame Werte) + (gleicher Orbit ? 26 : 6), begrenzt auf 46–96
+```
+
+Fotos, Aussehen oder Aktivität fließen nicht ein. In der App zeigt jedes Profil unter „So entsteht die Resonanz“ die eigene Rechnung. Der Code steht in [`src/lib/vela/data.ts`](src/lib/vela/data.ts).
+
 ## Status
 
 🚧 VELA befindet sich in aktiver Entwicklung. Der App-Code liegt in diesem Repository.
