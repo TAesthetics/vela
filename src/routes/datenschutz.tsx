@@ -160,6 +160,12 @@ function Datenschutz() {
           widerrufen. Schreib dazu an {OPERATOR.email}.
         </p>
         <p>
+          Eine Kopie deiner Daten (Konto, Profil, Foto, deine Swipes, deine gesendeten Nachrichten, Blockierungen,
+          deine Meldungen, Abo-Status, Altersprüfung und Sitzungen) kannst du jederzeit selbst herunterladen:
+          Ich → „Meine Daten herunterladen“. Du bekommst sie als JSON-Datei, einem gängigen, maschinenlesbaren
+          Format (Art. 20 DSGVO). Andere Personen erscheinen darin nur als ID.
+        </p>
+        <p>
           Du kannst dich außerdem bei der österreichischen Datenschutzbehörde beschweren:
           Österreichische Datenschutzbehörde, Barichgasse 40–42, 1030 Wien, dsb@dsb.gv.at, www.dsb.gv.at.
         </p>

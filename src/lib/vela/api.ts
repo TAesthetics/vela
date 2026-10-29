@@ -747,6 +747,85 @@ export const deleteProfile = createServerFn({ method: "POST" })
     return emptySnapshot();
   });
 
+/**
+ * DSGVO Art. 15/20: everything VELA stores about the signed-in person, as JSON.
+ * Only their own data: received swipes and reports filed against them are left
+ * out (they would reveal other people), messages are the ones they sent.
+ * No password hash, session tokens or ID images.
+ */
+export const exportMyData = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    const id = context.userId;
+    const safe = async <T>(query: () => Promise<T[]>): Promise<T[]> => {
+      try {
+        return await query();
+      } catch {
+        return [];
+      }
+    };
+    const [user] = await safe(
+      () =>
+        sql`select id, name, email, "emailVerified", "createdAt", "updatedAt" from "user" where id = ${id}`,
+    );
+    const [profile] = await sql`
+      select name, age, city, orbit, values, prompts, photo, plus, status, suspended_at, adult_confirmed_at, created_at
+      from vela_profiles where user_id = ${id}
+    `;
+    const swipes = await sql`
+      select to_user, direction, prompt_id, note, day, created_at
+      from vela_swipes where from_user = ${id} order by created_at
+    `;
+    const messages = await sql`
+      select case when pair_a = ${id} then pair_b else pair_a end as to_user, body, created_at
+      from vela_messages where from_user = ${id} order by created_at
+    `;
+    const blocks =
+      await sql`select to_user, created_at from vela_blocks where from_user = ${id} order by created_at`;
+    const reports = await sql`
+      select to_user, reason, details, created_at from vela_reports where from_user = ${id} order by created_at
+    `;
+    const subscription = await safe(
+      () => sql`
+        select status, current_period_end, cancel_at_period_end, updated_at
+        from vela_subscriptions where user_id = ${id}
+      `,
+    );
+    const ageChecks = await safe(
+      () =>
+        sql`select source, action, created_at from vela_age_flags where user_id = ${id} order by created_at`,
+    );
+    const idChecks = await safe(
+      () =>
+        sql`select status, created_at, decided_at from vela_id_checks where user_id = ${id} order by created_at`,
+    );
+    const sessions = await safe(
+      () => sql`
+        select "createdAt", "expiresAt", "ipAddress", "userAgent" from "session" where "userId" = ${id} order by "createdAt"
+      `,
+    );
+    // As a JSON string: DB rows are untyped, and dates serialize to ISO this way.
+    return JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        note: "Datenexport nach Art. 15 und 20 DSGVO. Andere Personen erscheinen nur als ID.",
+        account: user ?? { id },
+        profile: profile ?? null,
+        swipesGiven: swipes,
+        messagesSent: messages,
+        blocks,
+        reportsFiled: reports,
+        subscription: subscription[0] ?? null,
+        ageReview: ageChecks,
+        idChecks,
+        sessions,
+      },
+      null,
+      2,
+    );
+  });
+
 /** Max decoded size of an ID image (after client-side re-encode to JPEG). */
 const ID_MAX_BYTES = 1_500_000;
 
