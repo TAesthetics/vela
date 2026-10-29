@@ -221,6 +221,24 @@ export const auth = betterAuth({
   // flicker-prevention guidance (gate on `isPending`; SSR the session).
   session: { cookieCache: { enabled: true, maxAge: 300 } },
 
+  // Brute-force / spam protection for the auth endpoints. Stored in Postgres
+  // (table "rateLimit", migrations/0011) because the default in-memory store is
+  // per serverless instance on Vercel and would reset all the time. Keys are
+  // per client IP + path. Limits stay generous enough for people behind a
+  // shared mobile-carrier IP.
+  rateLimit: {
+    enabled: !authDisabled && !isWorkspacePreview(),
+    storage: "database",
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/*": { window: 15 * 60, max: 30 },
+      "/sign-up/*": { window: 60 * 60, max: 10 },
+      "/change-password": { window: 15 * 60, max: 10 },
+      "/change-email": { window: 60 * 60, max: 10 },
+    },
+  },
+
   // Local email/password — toggled only via `./email-password` (not a plugin).
   // No mail service: no verification mail and no reset mail (reset by e-mail
   // to the operator, see the login screen).
@@ -244,6 +262,14 @@ export const auth = betterAuth({
   // Secure + the names ourselves. (Browsers allow Secure cookies on
   // `http://localhost`, so local dev still works.)
   advanced: {
+    // On Vercel the edge sets `x-vercel-forwarded-for` / `x-forwarded-for` to
+    // the real client IP (client-sent values are overwritten), which the rate
+    // limiter above keys on.
+    ipAddress: {
+      ipAddressHeaders: process.env.VERCEL
+        ? ["x-vercel-forwarded-for", "x-forwarded-for", "x-real-ip"]
+        : ["x-forwarded-for", "x-real-ip"],
+    },
     useSecureCookies: false,
     defaultCookieAttributes: { secure: true, sameSite: "lax", path: "/" },
     cookies: {
