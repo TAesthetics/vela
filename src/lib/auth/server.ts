@@ -227,7 +227,9 @@ export const auth = betterAuth({
   // per client IP + path. Limits stay generous enough for people behind a
   // shared mobile-carrier IP.
   rateLimit: {
-    enabled: !authDisabled && !isWorkspacePreview(),
+    // On whenever a real Postgres is configured (deployed); off for the
+    // embedded PGLite preview.
+    enabled: !authDisabled && Boolean(databaseUrl),
     storage: "database",
     window: 60,
     max: 100,
