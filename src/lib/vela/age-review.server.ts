@@ -52,6 +52,7 @@ export async function purgeOldIdImages(sql: Sql) {
  * admin page loads — there is no cron. Cheap: every statement hits only rows
  * past their deadline.
  *  - ID images: 30 days.
+ *  - Crash reports: 30 days after last seen.
  *  - Reports: 12 months.
  *  - Remembered identities of accounts deleted while suspended: 12 months.
  *  - Age-review log and decided ID checks: 12 months, unless the person is
@@ -59,6 +60,8 @@ export async function purgeOldIdImages(sql: Sql) {
  */
 export async function purgeExpired(sql: Sql) {
   await purgeOldIdImages(sql);
+  const { purgeOldClientErrors } = await import("@/lib/vela/client-errors.server");
+  await purgeOldClientErrors(sql);
   await sql`delete from vela_reports where created_at < now() - interval '12 months'`;
   await sql`delete from vela_deleted_identities where created_at < now() - interval '12 months'`;
   await sql`

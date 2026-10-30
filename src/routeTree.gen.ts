@@ -16,6 +16,7 @@ import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as ImpressumRouteImport } from './routes/impressum'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminAgeRouteImport } from './routes/admin/age'
+import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AuthNativeRouteImport } from './routes/auth/native'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
@@ -55,6 +56,11 @@ const AdminAgeRoute = AdminAgeRouteImport.update({
   path: '/admin/age',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiClientErrorRoute = ApiClientErrorRouteImport.update({
+  id: '/api/client-error',
+  path: '/api/client-error',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthNativeRoute = AuthNativeRouteImport.update({
   id: '/auth/native',
   path: '/auth/native',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
   '/admin/age': typeof AdminAgeRoute
+  '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
   '/admin/age': typeof AdminAgeRoute
+  '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
   '/admin/age': typeof AdminAgeRoute
+  '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/impressum'
     | '/login'
     | '/admin/age'
+    | '/api/client-error'
     | '/auth/native'
     | '/api/auth/$'
     | '/api/stripe/webhook'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/impressum'
     | '/login'
     | '/admin/age'
+    | '/api/client-error'
     | '/auth/native'
     | '/api/auth/$'
     | '/api/stripe/webhook'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/impressum'
     | '/login'
     | '/admin/age'
+    | '/api/client-error'
     | '/auth/native'
     | '/api/auth/$'
     | '/api/stripe/webhook'
@@ -155,6 +167,7 @@ export interface RootRouteChildren {
   ImpressumRoute: typeof ImpressumRoute
   LoginRoute: typeof LoginRoute
   AdminAgeRoute: typeof AdminAgeRoute
+  ApiClientErrorRoute: typeof ApiClientErrorRoute
   AuthNativeRoute: typeof AuthNativeRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
@@ -211,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAgeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/client-error': {
+      id: '/api/client-error'
+      path: '/api/client-error'
+      fullPath: '/api/client-error'
+      preLoaderRoute: typeof ApiClientErrorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/native': {
       id: '/auth/native'
       path: '/auth/native'
@@ -243,6 +263,7 @@ const rootRouteChildren: RootRouteChildren = {
   ImpressumRoute: ImpressumRoute,
   LoginRoute: LoginRoute,
   AdminAgeRoute: AdminAgeRoute,
+  ApiClientErrorRoute: ApiClientErrorRoute,
   AuthNativeRoute: AuthNativeRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiStripeWebhookRoute: ApiStripeWebhookRoute,

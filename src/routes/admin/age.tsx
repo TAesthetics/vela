@@ -136,6 +136,29 @@ function AdminAge() {
           </li>
         ))}
       </ul>
+
+      <h2 className="mt-10 font-display text-2xl">App-Fehler (letzte 30 Tage)</h2>
+      <p className="mt-1 text-xs text-muted">
+        Anonyme Absturzberichte aus Web und App, gruppiert. Ohne Nutzer-ID oder IP; Löschung 30 Tage nach dem letzten Auftreten.
+      </p>
+      <ul className="mt-4 grid gap-2 text-sm">
+        {data.errors.length === 0 && <li className="text-muted">Keine Fehler gemeldet.</li>}
+        {data.errors.map((err) => (
+          <li key={err.fingerprint} className="rounded-xl bg-surface p-3">
+            <span className="break-words">{err.message}</span>
+            <span className="block text-xs text-muted">
+              {err.count}× · {err.platform} · {err.path || "/"}
+              {err.release ? ` · ${err.release}` : ""} · zuletzt {when(err.lastSeen)}
+            </span>
+            {err.stack && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-xs text-muted">Stack</summary>
+                <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-[11px] text-muted">{err.stack}</pre>
+              </details>
+            )}
+          </li>
+        ))}
+      </ul>
     </Shell>
   );
 }

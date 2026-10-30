@@ -1,5 +1,7 @@
 import type { ErrorComponentProps } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { TriangleAlert } from "lucide-react";
+import { reportError } from "@/lib/vela/error-reporter";
 
 const FALLBACK_MESSAGE = "An unexpected error occurred. Try reloading the page.";
 
@@ -10,6 +12,7 @@ function errorMessage(error: unknown): string {
 }
 
 export function AppErrorComponent({ error }: ErrorComponentProps) {
+  useEffect(() => reportError(error), [error]);
   return (
     <main
       className={

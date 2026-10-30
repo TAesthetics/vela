@@ -168,6 +168,10 @@ export default defineConfig(({ command, isPreview }) => ({
         ? "1"
         : "",
     ),
+    // Short commit id attached to crash reports (src/lib/vela/error-reporter.ts).
+    "import.meta.env.VITE_VELA_RELEASE": JSON.stringify(
+      (process.env.VERCEL_GIT_COMMIT_SHA || process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 7),
+    ),
   },
   plugins: [
     pgliteBootstrapPlugin(),

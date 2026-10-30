@@ -125,6 +125,13 @@ function Datenschutz() {
           lokale Einstellungen (z. B. welche Nachrichten du gesehen hast). Wir verwenden keine Tracking-
           oder Werbe-Cookies und keine Analysedienste.
         </p>
+        <p>
+          Stürzt die App ab, sendet sie einen anonymen Fehlerbericht an unseren eigenen Server: Fehlermeldung,
+          technischer Ablauf (Stack), aufgerufene Seite ohne Parameter, Plattform (Web, iOS, Android) und
+          App-Version. Wir speichern dabei weder deine Nutzer-ID noch deine IP-Adresse; E-Mail-Adressen und
+          lange Kennungen werden vorher entfernt. Zweck ist, Fehler zu finden und zu beheben (berechtigtes
+          Interesse, Art. 6 Abs. 1 lit. f DSGVO). Es wird kein externer Dienst eingebunden.
+        </p>
       </Section>
 
       <Section title="10. Hosting und Empfänger">
@@ -143,7 +150,7 @@ function Datenschutz() {
           Blockierungen, alle Nachrichten, an denen du beteiligt warst, sowie dein Login (Benutzerkonto,
           E-Mail-Adresse, Passwort-Hash und alle Sitzungen). Meldungen bewahren wir zum Schutz anderer bis
           zu 12 Monate auf; danach werden sie automatisch gelöscht. Ausweisbilder löschen wir nach der
-          Entscheidung, spätestens nach 30 Tagen. Das Prüfprotokoll der Altersprüfung und das Ergebnis einer
+          Entscheidung, spätestens nach 30 Tagen. Anonyme Fehlerberichte löschen wir 30 Tage nach dem letzten Auftreten. Das Prüfprotokoll der Altersprüfung und das Ergebnis einer
           Ausweisprüfung bewahren wir auf, solange eine Sperre besteht, und danach bis zu 12 Monate. Löschst du
           dein Konto während einer offenen Alterssperre, behalten wir zusätzlich nur einen nicht umkehrbaren
           Prüfwert (Hash) deiner Anmeldekennung, höchstens 12 Monate lang, damit die Sperre nicht durch eine neue

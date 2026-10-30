@@ -47,9 +47,27 @@ export type AdminFlag = {
   createdAt: string;
 };
 
+export type AdminClientError = {
+  fingerprint: string;
+  message: string;
+  stack: string;
+  path: string;
+  platform: string;
+  release: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+};
+
 export type AdminData =
   | { allowed: false }
-  | { allowed: true; checks: AdminIdCheck[]; reports: AdminReport[]; flags: AdminFlag[] };
+  | {
+      allowed: true;
+      checks: AdminIdCheck[];
+      reports: AdminReport[];
+      flags: AdminFlag[];
+      errors: AdminClientError[];
+    };
 
 function signalsOf(value: unknown): string[] {
   const list = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
@@ -83,8 +101,25 @@ async function load(sql: Sql): Promise<AdminData> {
     order by (r.reason = 'minor') desc, r.created_at asc
     limit 100
   `;
+  const errors = await sql<{ fingerprint: string; message: string; stack: string; path: string; platform: string; release: string; count: unknown; first_seen: unknown; last_seen: unknown }>`
+    select fingerprint, message, stack, path, platform, release, count, first_seen, last_seen
+    from vela_client_errors
+    order by last_seen desc
+    limit 30
+  `;
   return {
     allowed: true,
+    errors: errors.map((row) => ({
+      fingerprint: row.fingerprint,
+      message: row.message,
+      stack: row.stack,
+      path: row.path,
+      platform: row.platform,
+      release: row.release,
+      count: Number(row.count),
+      firstSeen: iso(row.first_seen),
+      lastSeen: iso(row.last_seen),
+    })),
     checks: checks.map((row) => ({
       id: row.id,
       userId: row.user_id,
