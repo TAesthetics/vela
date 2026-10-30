@@ -531,6 +531,11 @@ export function Plus({ onBack }: { onBack: () => void }) {
   const checkoutPlus = useVela((state) => state.checkoutPlus);
   const managePlus = useVela((state) => state.managePlus);
   const [busy, setBusy] = useState(false);
+  // Store apps (iOS/Android): no Stripe checkout and no link to it. Apple 3.1.1
+  // and Google Play Billing require in-app purchase for digital subscriptions,
+  // which is not wired up yet. Existing subscribers still get Plus.
+  const [native, setNative] = useState(false);
+  useEffect(() => setNative(isNativeApp()), []);
   const periodEnd = billing.periodEnd
     ? new Intl.DateTimeFormat("de-AT", { day: "numeric", month: "long", year: "numeric" }).format(
         new Date(billing.periodEnd),
@@ -579,7 +584,9 @@ export function Plus({ onBack }: { onBack: () => void }) {
         <p className="mt-2 text-sm text-muted">
           {plusAvailable
             ? "In dieser Vorschau ohne Abbuchung."
-            : "Mit Karte, Apple Pay oder Google Pay. Die Zahlung läuft sicher über Stripe."}
+            : native
+              ? "In der App kommt Vela+ bald."
+              : "Mit Karte, Apple Pay oder Google Pay. Die Zahlung läuft sicher über Stripe."}
         </p>
         <div className="mt-6 grid gap-3">
           {plus ? (
@@ -591,7 +598,7 @@ export function Plus({ onBack }: { onBack: () => void }) {
                   {billing.status === "past_due" ? " Die letzte Zahlung hat nicht geklappt." : ""}
                 </p>
               )}
-              {billing.customer && billing.configured && (
+              {billing.customer && billing.configured && !native && (
                 <button
                   type="button"
                   disabled={busy}
@@ -604,6 +611,10 @@ export function Plus({ onBack }: { onBack: () => void }) {
             </>
           ) : plusAvailable ? (
             <PrimaryButton onClick={() => void unlockPlus()}>In der Vorschau freischalten</PrimaryButton>
+          ) : native ? (
+            <p className="rounded-full bg-surface px-4 py-3 text-center text-sm text-muted">
+              Vela+ lässt sich in der App noch nicht abschließen.
+            </p>
           ) : billing.configured ? (
             <>
               <PrimaryButton disabled={busy} onClick={() => void run(checkoutPlus)}>
@@ -633,7 +644,8 @@ export function Plus({ onBack }: { onBack: () => void }) {
             </p>
           )}
         </div>
-        <div className="mt-8 rounded-3xl border border-line p-4">
+        {!native && (
+          <div className="mt-8 rounded-3xl border border-line p-4">
           <div className="flex items-center gap-2">
             <Smartphone className="size-5 text-ember" />
             <p className="font-medium text-paper">iPhone und Android</p>
@@ -653,7 +665,8 @@ export function Plus({ onBack }: { onBack: () => void }) {
             Freigabe läuft darüber, nicht in dieser Vorschau. Die App und die Swipe-Regeln sind
             dieselben.
           </p>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -40,8 +40,8 @@ Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Goog
    - VELA hat bereits: Melden, Blockieren, Prüfung durch den Betreiber und eine Kontaktadresse im Impressum.
    - Apple verlangt zusätzlich „eine Methode, anstößige Inhalte zu filtern“. Ein einfacher Wortfilter für Profiltexte und Nachrichten senkt das Risiko.
    - Im Review-Hinweis beschreiben, wie schnell Meldungen bearbeitet werden (Apple erwartet: innerhalb von 24 Stunden).
-3. **Vela+ bleibt aus.** Vela+ ist nur in der Vorschau sichtbar. Bezahlfunktionen in der App müssten über Apple- bzw. Google-In-App-Käufe laufen.
-4. **Demo-Konto für die Prüfung.** Leg ein eigenes Google-Konto nur für das Review an, ohne 2-Faktor-Abfrage, mit fertigem VELA-Profil. Zugangsdaten in die Review-Hinweise. Am besten gibt es auch ein zweites Testprofil, damit die Prüfer ein Match und den Schleier sehen.
+3. **Vela+ ohne Stripe in der App.** In der iOS- und Android-App zeigt der Vela+-Bildschirm keinen Kauf- und keinen „Abo verwalten“-Knopf und keinen Hinweis auf die Website (Apple 3.1.1, Google Play Billing). Wer schon über die Website abonniert hat, behält Vela+ auch in der App. Ein Kauf in der App braucht später Apple- bzw. Google-In-App-Käufe (z. B. über RevenueCat, gekoppelt an dasselbe Vela+-Feld).
+4. **Demo-Konto für die Prüfung.** Leg in VELA ein eigenes Konto (E-Mail + Passwort) nur für das Review an, mit fertigem VELA-Profil. Zugangsdaten in die Review-Hinweise. Am besten gibt es auch ein zweites Testprofil, damit die Prüfer ein Match und den Schleier sehen.
 5. **Konto löschen** ist in der App vorhanden: Ich → „Konto löschen“. Das ist für Apple (5.1.1(v)) und Google Pflicht. Für Google zusätzlich eine Web-Adresse angeben: `https://<deine-domain>/datenschutz` (Punkt 10 erklärt die Löschung, dazu die E-Mail-Adresse).
 
 ## 3. Apple App Store
@@ -122,8 +122,8 @@ Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Goog
    - Screenshots für iPhone 6,9" (1320×2868): mindestens 3, ideal sind Schleier, Chat und Profil. Die App ist nur fürs iPhone eingestellt, also keine iPad-Screenshots nötig.
    - Beschreibung, Untertitel und Keywords aus Abschnitt 5.
 7. **App-Review-Informationen:**
-   - Demo-Zugang (Google-Konto, siehe Abschnitt 2), Kontakt-E-Mail.
-   - Hinweis-Text, z. B.: „Anmeldung über ‚Weiter mit Google‘ mit dem Demo-Konto. Fotos sind verschleiert, bis beide 3 Nachrichten geschrieben haben. Melden/Blockieren im Chat-Menü, Konto löschen unter Ich. Meldungen prüft der Betreiber innerhalb von 24 Stunden.“
+   - Demo-Zugang (E-Mail + Passwort, siehe Abschnitt 2), Kontakt-E-Mail.
+   - Hinweis-Text, z. B.: „Anmeldung mit E-Mail und Passwort des Demo-Kontos. Fotos sind verschleiert, bis beide 3 Nachrichten geschrieben haben. Melden/Blockieren im Chat-Menü, Konto löschen unter Ich. Meldungen prüft der Betreiber innerhalb von 24 Stunden.“
 8. **Exportkonformität:** Die App nutzt nur Standard-Verschlüsselung (HTTPS). Das ist im Info.plist bereits als `ITSAppUsesNonExemptEncryption = NO` gesetzt.
 9. Build auswählen → **Zur Prüfung einreichen**.
 
@@ -145,7 +145,7 @@ Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Goog
 1. **App erstellen:** Name „VELA – Erst kennenlernen“, Standardsprache Deutsch, App (nicht Spiel), kostenlos.
 2. **App-Inhalte:**
    - **Datenschutzerklärung:** `https://<deine-domain>/datenschutz`.
-   - **App-Zugriff:** „Einige Funktionen sind eingeschränkt“ → Demo-Google-Konto mit Anleitung.
+   - **App-Zugriff:** „Einige Funktionen sind eingeschränkt“ → Demo-Konto (E-Mail + Passwort) mit Anleitung.
    - **Werbung:** enthält keine Werbung.
    - **Einstufung des Inhalts (IARC-Fragebogen):** Kategorie „Soziale Netzwerke / Kommunikation“. Angeben: Nutzer können interagieren und Inhalte (Text, Fotos) teilen; keine Gewalt, kein Glücksspiel.
    - **Zielgruppe:** nur **18 Jahre und älter**. Nicht für Kinder; die App spricht keine Kinder an.
@@ -252,7 +252,7 @@ Push ist vorbereitet, aber aus (`pushNotificationsEnabled` in `src/lib/native.ts
 - [ ] `npm run native:setup` mit `VELA_APP_URL` ausgeführt
 - [ ] „Mit Apple anmelden“ ergänzt (sonst Ablehnung nach 4.8 wahrscheinlich)
 - [ ] Wortfilter für anstößige Inhalte (Apple 1.2), Meldungen innerhalb von 24 h
-- [ ] Demo-Google-Konto mit Profil (plus zweites Testprofil)
+- [ ] Demo-Konto (E-Mail + Passwort) mit Profil (plus zweites Testprofil)
 - [ ] Datenschutz- und Impressum-URL erreichbar
 - [ ] Apple: Altersfreigabe 18+, Datenschutz-Labels, Screenshots, Review-Hinweise
 - [ ] Google: geschlossener Test 12 Tester / 14 Tage, Data safety, IARC, Zielgruppe 18+
