@@ -16,6 +16,10 @@ Diese Anleitung bringt VELA als iOS- und Android-App in die Stores. Stand: Oktob
 - **Icons und Splash** werden per Code aus `resources/*.svg` erzeugt (`scripts/native-assets.mjs`). Das Logo ist der VELA-Schriftzug in Fraunces mit dem orangen Funken. `scripts/native-brand-svg.py` baut die SVGs neu, falls sich die Marke ändert.
 - Die Ordner `ios/` und `android/` sind **nicht im Repo**. Sie entstehen reproduzierbar mit einem Befehl (siehe unten). Wenn du sie lieber versionierst, lösch die zwei Zeilen in `.gitignore`.
 
+### Test-APK ohne eigenen Rechner (GitHub Actions)
+
+Bei jedem Push auf `main` baut `.github/workflows/ci.yml` eine installierbare Android-Test-App (debug-signiert, lädt `https://vela-sable-six.vercel.app`). Download: GitHub → Actions → neuester „CI“-Lauf → Artifacts → `vela-android-debug` (ZIP mit der APK, 14 Tage verfügbar). Für Google Play braucht es später ein signiertes Release-Bundle (`.aab`) mit eigenem Upload-Schlüssel.
+
 ### Einmal einrichten
 
 1. **Produktions-URL:** die öffentliche Adresse von VELA, z. B. `https://vela-xxxx.vercel.app` (siehe `docs/VERCEL.md`) oder deine eigene Domain. Sie muss mit `https://` beginnen, darf keinen Pfad haben und muss **dieselbe** sein wie `BETTER_AUTH_URL`.
@@ -31,7 +35,7 @@ Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Goog
 
 ## 2. Vor der Einreichung: offene Punkte
 
-1. **„Mit Apple anmelden“ (Apple-Regel 4.8).** Bietet eine App Google- oder X-Login an, verlangt Apple zusätzlich eine gleichwertige datensparsame Anmeldung, praktisch „Sign in with Apple“. VELA hat das noch nicht. Ohne diese Option ist eine **Ablehnung sehr wahrscheinlich**. Lösung: einen Apple-Anbieter ergänzen (Apple Developer → Identifiers → Services ID, wie bei Google in `src/lib/auth/server.ts`). Google Play verlangt das nicht.
+1. **„Mit Apple anmelden“ (Apple-Regel 4.8)** ist derzeit **nicht nötig**: VELA nutzt nur E-Mail und Passwort, keine Google- oder X-Anmeldung. Kommt später ein Social-Login dazu, muss auch „Sign in with Apple“ rein.
 2. **Inhalte von Nutzerinnen und Nutzern (Apple 1.2).**
    - VELA hat bereits: Melden, Blockieren, Prüfung durch den Betreiber und eine Kontaktadresse im Impressum.
    - Apple verlangt zusätzlich „eine Methode, anstößige Inhalte zu filtern“. Ein einfacher Wortfilter für Profiltexte und Nachrichten senkt das Risiko.

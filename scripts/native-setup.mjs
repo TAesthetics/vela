@@ -37,8 +37,21 @@ const edit = (file, fn) => {
 
 writeFileSync("native/www/app-url.js", `window.VELA_APP_URL = ${JSON.stringify(appUrl)};\n`);
 
-if (!existsSync("ios")) run("npx cap add ios");
-if (!existsSync("android")) run("npx cap add android");
+// VELA_NATIVE_PLATFORMS=android limits setup to one platform (CI on Linux
+// has no Xcode). Default: both.
+const platforms = (process.env.VELA_NATIVE_PLATFORMS ?? "ios,android")
+  .split(",")
+  .map((p) => p.trim())
+  .filter(Boolean);
+for (const p of platforms) {
+  if (p !== "ios" && p !== "android") {
+    console.error(`VELA_NATIVE_PLATFORMS: unbekannte Plattform "${p}" (erlaubt: ios, android)`);
+    process.exit(1);
+  }
+}
+
+if (platforms.includes("ios") && !existsSync("ios")) run("npx cap add ios");
+if (platforms.includes("android") && !existsSync("android")) run("npx cap add android");
 
 run("node scripts/native-assets.mjs");
 
@@ -123,5 +136,5 @@ if (existsSync(manifest)) {
   );
 }
 
-run("npx cap sync");
+run(platforms.length === 1 ? `npx cap sync ${platforms[0]}` : "npx cap sync");
 console.log(`\nFertig. Die App lädt ${appUrl}. Weiter: npx cap open ios | npx cap open android`);
