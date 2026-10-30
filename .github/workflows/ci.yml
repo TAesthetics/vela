@@ -1,0 +1,60 @@
+# CI for VELA: typecheck + web build on every push/PR, and an installable
+# Android test APK (at.vela.app, debug-signed) that loads the live app.
+# Download it under Actions → the run → Artifacts → "vela-android-debug".
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VELA_APP_URL: https://vela-sable-six.vercel.app
+
+jobs:
+  web:
+    name: Typecheck + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # Web build only (no DB migration; that runs on Vercel).
+      - run: node scripts/with-app-env.mjs npx vite build
+
+  android:
+    name: Android test APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      # Creates android/ (gitignored), icons, splash, vela:// deep link, cap sync.
+      - run: npm run native:setup
+        env:
+          VELA_NATIVE_PLATFORMS: android
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vela-android-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
