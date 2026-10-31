@@ -15,7 +15,7 @@ import {
 } from "@/lib/vela/api";
 import { emptySnapshot, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
-export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip";
+export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip" | "filtered";
 
 type VelaStore = {
   ready: boolean;
@@ -133,6 +133,8 @@ export const useVela = create<VelaStore>((set, get) => ({
             ? "Funk ist raus. Wenn es klingt, meldet sich die Person."
             : result.status === "limit"
               ? "Heute sind die Swipes alle."
+              : result.status === "filtered"
+                ? "Die Notiz enthält ein Wort, das wir bei Vela nicht durchlassen. Formulier sie bitte anders."
               : get().toast,
       }),
     );

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { FILTER_MESSAGE, isObjectionable } from "./content-filter";
 import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import {
@@ -403,6 +404,9 @@ function cleanProfile(input: unknown): { me: Me } | { error: string } {
     cleanPrompts.push({ id, q, a });
   }
   if (cleanPrompts[0].q === cleanPrompts[1].q) return { error: "Zwei verschiedene Fragen." };
+  if ([name, city, ...cleanPrompts.map((prompt) => prompt.a)].some(isObjectionable)) {
+    return { error: FILTER_MESSAGE };
+  }
   let photo: string | null = null;
   if (raw.photo) {
     const value = String(raw.photo);
@@ -487,6 +491,10 @@ export const swipe = createServerFn({ method: "POST" })
     const direction = data?.direction === "spark" ? "spark" : data?.direction === "pass" ? "pass" : "";
     const note = String(data?.note ?? "").trim().slice(0, 240);
     const promptId = String(data?.promptId ?? "");
+    if (direction === "spark" && note && isObjectionable(note)) {
+      const sql = await getSql();
+      return { status: "filtered" as const, snapshot: await snapshot(sql, context.userId) };
+    }
     if (!toUser || toUser === context.userId || !direction) {
       const sql = await getSql();
       return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
@@ -589,6 +597,9 @@ export const sendMessage = createServerFn({ method: "POST" })
     }
     if (text.replace(/\s/g, "").length < 2) {
       return { error: "Ein bisschen mehr, bitte.", snapshot: await snapshot(sql, context.userId) };
+    }
+    if (isObjectionable(text)) {
+      return { error: FILTER_MESSAGE, snapshot: await snapshot(sql, context.userId) };
     }
     const mutual = await sql`
       select 1 from vela_swipes mine
