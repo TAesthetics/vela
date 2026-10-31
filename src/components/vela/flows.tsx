@@ -19,6 +19,7 @@ import { SafetyMenu } from "@/components/vela/safety";
 import { LegalLinks } from "@/components/vela/legal";
 import { exportMyData } from "@/lib/vela/api";
 import { isNativeApp } from "@/lib/native";
+import { changeMyPassword } from "@/lib/auth/client";
 
 export function Signals({
   onChat,
@@ -347,6 +348,103 @@ async function downloadMyData() {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+function ChangePassword() {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setMessage("");
+          setOpen(true);
+        }}
+        className="mt-6 block h-11 text-sm text-muted"
+      >
+        Passwort ändern
+      </button>
+    );
+  }
+  const submit = async () => {
+    if (next.length < 8) return setMessage("Das neue Passwort braucht mindestens 8 Zeichen.");
+    if (next.length > 128) return setMessage("Das neue Passwort ist zu lang (höchstens 128 Zeichen).");
+    if (next !== repeat) return setMessage("Die beiden neuen Passwörter sind nicht gleich.");
+    if (next === current) return setMessage("Das neue Passwort ist dasselbe wie das alte.");
+    setBusy(true);
+    setMessage("");
+    try {
+      await changeMyPassword(current, next);
+      setCurrent("");
+      setNext("");
+      setRepeat("");
+      setOpen(false);
+      setMessage("Passwort geändert. Alle anderen Geräte sind jetzt abgemeldet.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Das hat nicht geklappt. Bitte versuch es noch einmal.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const field = "h-12 w-full rounded-2xl bg-surface px-4 text-base text-paper outline-none";
+  return (
+    <form
+      className="mt-6 grid gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+    >
+      <span className="text-xs tracking-widest text-muted uppercase">Passwort ändern</span>
+      <input
+        type="password"
+        autoComplete="current-password"
+        placeholder="Aktuelles Passwort"
+        aria-label="Aktuelles Passwort"
+        value={current}
+        onChange={(event) => setCurrent(event.target.value)}
+        className={field}
+      />
+      <input
+        type="password"
+        autoComplete="new-password"
+        placeholder="Neues Passwort (mind. 8 Zeichen)"
+        aria-label="Neues Passwort"
+        value={next}
+        onChange={(event) => setNext(event.target.value)}
+        className={field}
+      />
+      <input
+        type="password"
+        autoComplete="new-password"
+        placeholder="Neues Passwort wiederholen"
+        aria-label="Neues Passwort wiederholen"
+        value={repeat}
+        onChange={(event) => setRepeat(event.target.value)}
+        className={field}
+      />
+      {message && <p className="text-sm text-ember">{message}</p>}
+      <PrimaryButton type="submit" disabled={busy || !current || !next || !repeat}>
+        {busy ? "Wird geändert…" : "Neues Passwort speichern"}
+      </PrimaryButton>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(false);
+          setMessage("");
+        }}
+        className="h-11 text-sm text-muted"
+      >
+        Abbrechen
+      </button>
+      <p className="text-sm text-muted">Danach werden alle anderen Geräte abgemeldet.</p>
+    </form>
+  );
+}
+
 export function MeScreen({ onPlus }: { onPlus: () => void }) {
   const me = useVela((state) => state.me);
   const plus = useVela((state) => state.plus);
@@ -488,6 +586,8 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
       <div className="mt-6">
         <UserButton />
       </div>
+
+      <ChangePassword />
 
       <button
         type="button"

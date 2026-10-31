@@ -168,6 +168,7 @@ export function emailAuthErrorMessage(error: { code?: string; status?: number; m
   if (code === "PASSWORD_TOO_SHORT") return "Das Passwort braucht mindestens 8 Zeichen.";
   if (code === "PASSWORD_TOO_LONG") return "Das Passwort ist zu lang (höchstens 128 Zeichen).";
   if (code === "INVALID_EMAIL") return "Bitte gib eine gültige E-Mail-Adresse ein.";
+  if (code === "INVALID_PASSWORD") return "Das aktuelle Passwort stimmt nicht.";
   return "Das hat nicht geklappt. Bitte versuch es noch einmal.";
 }
 
@@ -181,6 +182,19 @@ function keepPreviewBearer(response: Response) {
 export async function signInWithEmail(email: string, password: string): Promise<void> {
   const { error } = await authClient.signIn.email(
     { email: email.trim(), password },
+    { onSuccess: (ctx) => keepPreviewBearer(ctx.response) },
+  );
+  if (error) throw new Error(emailAuthErrorMessage(error));
+}
+
+/**
+ * Change the password of the signed-in account. Signs out every other device
+ * (all other sessions are revoked), this one stays signed in. Throws a German
+ * message on failure.
+ */
+export async function changeMyPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const { error } = await authClient.changePassword(
+    { currentPassword, newPassword, revokeOtherSessions: true },
     { onSuccess: (ctx) => keepPreviewBearer(ctx.response) },
   );
   if (error) throw new Error(emailAuthErrorMessage(error));
