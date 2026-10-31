@@ -175,6 +175,27 @@ async function statusOf(sql: Sql, userId: string) {
   return rows[0]?.status ?? "active";
 }
 
+/**
+ * Per-person abuse limits, counted from the rows themselves so they hold on
+ * serverless (no in-memory state). Generous for real chats, tight for bots.
+ */
+const MESSAGE_LIMITS = { perMinute: 20, perDay: 600 };
+const REPORTS_PER_DAY = 10;
+
+async function messageLimitHit(sql: Sql, userId: string) {
+  const rows = await sql<{ minute: number | string; day: number | string }>`
+    select
+      count(*) filter (where created_at > now() - interval '1 minute') as minute,
+      count(*) as day
+    from vela_messages
+    where from_user = ${userId} and created_at > now() - interval '1 day'
+  `;
+  return (
+    Number(rows[0]?.minute ?? 0) >= MESSAGE_LIMITS.perMinute ||
+    Number(rows[0]?.day ?? 0) >= MESSAGE_LIMITS.perDay
+  );
+}
+
 /** Rejects actions by suspended people and toward suspended/blocked people. */
 async function canInteract(sql: Sql, me: string, other: string) {
   if ((await statusOf(sql, me)) !== "active") return false;
@@ -513,7 +534,7 @@ export const swipe = createServerFn({ method: "POST" })
         ${day}
       )
     `;
-    if (direction === "spark" && note) {
+    if (direction === "spark" && note && !(await messageLimitHit(sql, context.userId))) {
       const [pairA, pairB] = pairOf(context.userId, toUser);
       await sql`
         insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
@@ -584,6 +605,9 @@ export const sendMessage = createServerFn({ method: "POST" })
     }
     if (!(await canInteract(sql, context.userId, toUser))) {
       return { error: "Dieses Gespräch ist beendet.", snapshot: await snapshot(sql, context.userId) };
+    }
+    if (await messageLimitHit(sql, context.userId)) {
+      return { error: "Kurz durchatmen. Gleich geht es weiter.", snapshot: await snapshot(sql, context.userId) };
     }
     const [pairA, pairB] = pairOf(context.userId, toUser);
     await sql`
@@ -679,6 +703,27 @@ export const reportUser = createServerFn({ method: "POST" })
     }
     if (!REASON_IDS.has(reason)) {
       return { error: "Wähl einen Grund.", snapshot: await snapshot(sql, context.userId) };
+    }
+    // One report per person is enough (it already blocks), and a daily cap
+    // keeps mass false reports from flooding the operator's review queue.
+    const already = await sql`
+      select 1 from vela_reports where from_user = ${context.userId} and to_user = ${toUser} limit 1
+    `;
+    if (already.length > 0) {
+      await insertBlock(sql, context.userId, toUser);
+      return { error: null, snapshot: await snapshot(sql, context.userId) };
+    }
+    const recent = await sql<{ n: number | string }>`
+      select count(*) as n from vela_reports
+      where from_user = ${context.userId} and created_at > now() - interval '1 day'
+    `;
+    if (Number(recent[0]?.n ?? 0) >= REPORTS_PER_DAY) {
+      // Still block, so the person is out of sight; just no new report row.
+      await insertBlock(sql, context.userId, toUser);
+      return {
+        error: "Du hast heute schon viele Meldungen geschickt. Die Person ist blockiert, wir schauen uns die bisherigen an.",
+        snapshot: await snapshot(sql, context.userId),
+      };
     }
     await sql`
       insert into vela_reports (id, from_user, to_user, reason, details)
