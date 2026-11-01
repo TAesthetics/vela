@@ -55,6 +55,7 @@ function Authed() {
   const threads = useVela((state) => state.threads);
   const seen = useVela((state) => state.seen);
   const load = useVela((state) => state.load);
+  const sync = useVela((state) => state.sync);
   const [tab, setTab] = useState<Tab>("discover");
   const [screen, setScreen] = useState<Screen>({ name: "tabs" });
 
@@ -82,6 +83,27 @@ function Authed() {
     if (result === "cancel") useVela.setState({ toast: "Kein Problem, es wurde nichts abgebucht." });
     if (result === "portal") void load().catch(() => undefined);
   }, [load]);
+
+  // Keep chats live without a reload: poll while the app is visible (faster in
+  // an open chat) and catch up right away when it comes back to the foreground.
+  const inChat = screen.name === "chat";
+  useEffect(() => {
+    if (!ready || typeof document === "undefined") return;
+    const tick = () => {
+      if (document.visibilityState === "visible") void sync().catch(() => undefined);
+    };
+    const timer = window.setInterval(tick, inChat ? 8000 : 30000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [ready, inChat, sync]);
 
   useEffect(() => {
     if (!toast) return;

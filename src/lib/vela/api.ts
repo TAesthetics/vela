@@ -439,6 +439,18 @@ export const loadVela = createServerFn({ method: "GET" })
     return snapshot(sql, context.userId);
   });
 
+/**
+ * Light refresh for open sessions (new messages, sparks, matches): same
+ * snapshot as loadVela, but without the retention purge, so frequent polling
+ * stays cheap.
+ */
+export const syncVela = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    return snapshot(sql, context.userId);
+  });
+
 export const saveProfile = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => input)

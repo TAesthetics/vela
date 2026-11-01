@@ -11,6 +11,7 @@ import {
   sendMessage,
   setPlus,
   swipe,
+  syncVela,
   undoPass,
 } from "@/lib/vela/api";
 import { emptySnapshot, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
@@ -37,6 +38,8 @@ type VelaStore = {
   celebrate: Person | null;
   toast: string | null;
   load: () => Promise<void>;
+  /** Pulls new messages, sparks and matches without touching the deck or the profile. */
+  sync: () => Promise<void>;
   save: (me: Me) => Promise<string | null>;
   pass: (id: string) => Promise<SparkResult>;
   undo: () => Promise<boolean>;
@@ -72,7 +75,11 @@ function readSeen() {
   }
 }
 
+/** Bumped on every full snapshot apply, so a slower background sync never overwrites newer state. */
+let applied = 0;
+
 function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
+  applied += 1;
   return {
     me: snapshot.me,
     suspension: snapshot.suspension,
@@ -103,6 +110,22 @@ export const useVela = create<VelaStore>((set, get) => ({
     const snapshot = await loadVela();
     const coach = typeof localStorage !== "undefined" && localStorage.getItem("vela-coach") === "1";
     set({ ...apply(snapshot), seen: readSeen(), seenCoach: coach });
+  },
+  sync: async () => {
+    if (!get().ready) return;
+    const before = applied;
+    const snapshot = await syncVela();
+    if (applied !== before) return;
+    set({
+      suspension: snapshot.suspension,
+      plus: snapshot.plus,
+      plusAvailable: snapshot.plusAvailable,
+      billing: snapshot.billing,
+      swipesLeft: snapshot.swipesLeft,
+      inbound: snapshot.inbound,
+      inboundCount: snapshot.inboundCount,
+      threads: snapshot.threads,
+    });
   },
   save: async (me) => {
     const result = await saveProfile({ data: me });
