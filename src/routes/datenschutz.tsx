@@ -61,7 +61,9 @@ function Datenschutz() {
           Wenn du jemanden blockierst oder meldest, speichern wir das (wer, wen, Zeitpunkt, Grund und
           optionaler Text). Zweck ist der Schutz der Nutzerinnen und Nutzer und die Verhinderung von
           Missbrauch (berechtigtes Interesse, Art. 6 Abs. 1 lit. f DSGVO). Gemeldete Personen erfahren
-          nicht, wer sie gemeldet hat.
+          nicht, wer sie gemeldet hat. Stellt der Betreiber nach einer Meldung einen Verstoß gegen die Regeln fest
+          (z. B. Belästigung, Hass, Spam, Betrug), kann er das Konto sperren; gesperrte Konten sind für niemanden
+          sichtbar. Die Sperre und ihr Grund werden im Prüfprotokoll vermerkt.
         </p>
       </Section>
 
@@ -152,7 +154,7 @@ function Datenschutz() {
           zu 12 Monate auf; danach werden sie automatisch gelöscht. Ausweisbilder löschen wir nach der
           Entscheidung, spätestens nach 30 Tagen. Anonyme Fehlerberichte löschen wir 30 Tage nach dem letzten Auftreten. Das Prüfprotokoll der Altersprüfung und das Ergebnis einer
           Ausweisprüfung bewahren wir auf, solange eine Sperre besteht, und danach bis zu 12 Monate. Löschst du
-          dein Konto während einer offenen Alterssperre, behalten wir zusätzlich nur einen nicht umkehrbaren
+          dein Konto während einer offenen Alterssperre oder einer Sperre wegen Regelverstoß, behalten wir zusätzlich nur einen nicht umkehrbaren
           Prüfwert (Hash) deiner Anmeldekennung, höchstens 12 Monate lang, damit die Sperre nicht durch eine neue
           Anmeldung umgangen werden kann; Name, E-Mail-Adresse und Profildaten sind darin nicht enthalten.
           Abo-Daten und Rechnungen bei Vela+ siehe Punkt 8. Server-Protokolle des Hosters werden nach kurzer Zeit automatisch gelöscht.

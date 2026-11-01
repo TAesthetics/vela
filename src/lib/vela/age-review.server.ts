@@ -13,7 +13,7 @@ export async function recordFlag(
   sql: Sql,
   userId: string,
   source: AgeSource,
-  action: "none" | "review" | "suspended",
+  action: "none" | "review" | "suspended" | "banned" | "unbanned",
   signals: string[] = [],
 ) {
   await sql`
@@ -35,6 +35,24 @@ export async function suspendForAge(sql: Sql, userId: string) {
     update vela_profiles set status = 'suspended_age', suspended_at = now()
     where user_id = ${userId} and status = 'active'
   `;
+}
+
+/** Ban for rule violations (not age): hidden everywhere, no ID upload path. */
+export async function banForRules(sql: Sql, userId: string) {
+  await sql`
+    update vela_profiles set status = 'banned', suspended_at = now()
+    where user_id = ${userId} and status <> 'banned'
+  `;
+}
+
+/** Lift a rule ban (operator). Leaves age suspensions untouched. */
+export async function liftBan(sql: Sql, userId: string) {
+  const rows = await sql`
+    update vela_profiles set status = 'active', suspended_at = null
+    where user_id = ${userId} and status = 'banned'
+    returning user_id
+  `;
+  return rows.length > 0;
 }
 
 /** Delete ID images older than 30 days (and any still pending → expired). */
@@ -123,13 +141,20 @@ async function identityHashes(sql: Sql, userId: string): Promise<string[]> {
   );
 }
 
-/** Before deleting an account with an open age suspension: remember the identity. */
-export async function rememberSuspendedIdentity(sql: Sql, userId: string) {
+export type CarriedSuspension = "age" | "ban";
+
+/**
+ * Before deleting an account with an open age suspension or a rule ban:
+ * remember the identity (keyed hash only) and why.
+ */
+export async function rememberSuspendedIdentity(sql: Sql, userId: string, kind: CarriedSuspension = "age") {
+  const reason = kind === "ban" ? "ban" : "age_suspension";
   for (const hash of await identityHashes(sql, userId)) {
     await sql`
       insert into vela_deleted_identities (identity_hash, reason)
-      values (${hash}, 'age_suspension')
-      on conflict (identity_hash) do update set created_at = now()
+      values (${hash}, ${reason})
+      on conflict (identity_hash) do update set created_at = now(),
+        reason = case when vela_deleted_identities.reason = 'ban' then 'ban' else excluded.reason end
     `;
   }
 }
@@ -138,17 +163,24 @@ export async function rememberSuspendedIdentity(sql: Sql, userId: string) {
  * On a new profile: if this login identity was deleted while suspended (within
  * 12 months), carry the suspension over to the new user id.
  */
-export async function carryOverSuspension(sql: Sql, userId: string): Promise<boolean> {
+export async function carryOverSuspension(sql: Sql, userId: string): Promise<CarriedSuspension | null> {
   const hashes = await identityHashes(sql, userId);
-  let carried = false;
+  let carried: CarriedSuspension | null = null;
   for (const hash of hashes) {
-    const hit = await sql`
+    const hit = await sql<{ reason: string }>`
       delete from vela_deleted_identities
       where identity_hash = ${hash} and created_at > now() - interval '12 months'
-      returning identity_hash
+      returning reason
     `;
-    if (hit.length > 0) carried = true;
+    for (const row of hit) {
+      if (row.reason === "ban") carried = "ban";
+      else carried ??= "age";
+    }
   }
-  if (carried) await recordFlag(sql, userId, "operator", "suspended", ["Sperre nach Löschen und Neuanmeldung übernommen"]);
+  if (carried === "ban") {
+    await recordFlag(sql, userId, "operator", "banned", ["Sperre (Regelverstoß) nach Löschen und Neuanmeldung übernommen"]);
+  } else if (carried === "age") {
+    await recordFlag(sql, userId, "operator", "suspended", ["Sperre nach Löschen und Neuanmeldung übernommen"]);
+  }
   return carried;
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { decideIdCheck, loadAdmin, resolveReport, type AdminData } from "@/lib/vela/admin-api";
+import { decideIdCheck, liftRuleBan, loadAdmin, resolveReport, type AdminData } from "@/lib/vela/admin-api";
 import { REPORT_REASONS } from "@/lib/vela/data";
 
 export const Route = createFileRoute("/admin/age")({
@@ -116,6 +116,18 @@ function AdminAge() {
               <button
                 type="button"
                 disabled={busy}
+                onClick={() => {
+                  if (window.confirm(`${report.name ?? "Diese Person"} wegen Regelverstoß sperren? Kein Ausweis-Weg, nur du kannst die Sperre aufheben.`)) {
+                    void act(() => resolveReport({ data: { id: report.id, ban: true } }));
+                  }
+                }}
+                className="h-10 flex-1 rounded-full border border-ember text-sm text-ember"
+              >
+                Sperren (Regelverstoß)
+              </button>
+              <button
+                type="button"
+                disabled={busy}
                 onClick={() => void act(() => resolveReport({ data: { id: report.id, suspend: false } }))}
                 className="h-10 flex-1 rounded-full border border-line text-sm"
               >
@@ -125,6 +137,30 @@ function AdminAge() {
           </div>
         ))}
       </div>
+
+      <h2 className="mt-10 font-display text-2xl">Gesperrt wegen Regelverstoß ({data.banned.length})</h2>
+      <ul className="mt-4 grid gap-2 text-sm">
+        {data.banned.length === 0 && <li className="text-muted">Niemand.</li>}
+        {data.banned.map((person) => (
+          <li key={person.userId} className="flex items-center gap-3 rounded-xl bg-surface p-3">
+            <span className="flex-1">
+              {person.name ?? person.userId} · seit {when(person.since)}
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (window.confirm(`Sperre für ${person.name ?? "diese Person"} aufheben?`)) {
+                  void act(() => liftRuleBan({ data: { userId: person.userId } }));
+                }
+              }}
+              className="h-9 rounded-full border border-line px-4 text-xs"
+            >
+              Aufheben
+            </button>
+          </li>
+        ))}
+      </ul>
 
       <h2 className="mt-10 font-display text-2xl">Alters-Hinweise (letzte 50)</h2>
       <ul className="mt-4 grid gap-2 text-sm">

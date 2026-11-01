@@ -48,7 +48,7 @@ export type Thread = {
 export type IdCheckStatus = "none" | "pending" | "approved" | "rejected" | "expired";
 
 /** Set when the signed-in person is suspended for a suspected age < 18. */
-export type Suspension = { reason: "age"; idCheck: IdCheckStatus };
+export type Suspension = { reason: "age" | "ban"; idCheck: IdCheckStatus };
 
 /** VELA+ subscription state (Stripe). */
 export type Billing = {

@@ -229,7 +229,8 @@ async function openAgeSuspension(sql: Sql, userId: string) {
   return rows.length > 0;
 }
 
-async function suspensionSnapshot(sql: Sql, userId: string): Promise<Snapshot> {
+async function suspensionSnapshot(sql: Sql, userId: string, profileStatus: string): Promise<Snapshot> {
+  if (profileStatus === "banned") return { ...emptySnapshot(), suspension: { reason: "ban", idCheck: "none" } };
   const checks = await sql<{ status: string }>`
     select status from vela_id_checks where user_id = ${userId}
     order by created_at desc limit 1
@@ -253,7 +254,7 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
   `;
   const meRow = mine[0];
   // Suspended people see only the suspension screen — nothing about others.
-  if (meRow && meRow.status !== "active") return suspensionSnapshot(sql, userId);
+  if (meRow && meRow.status && meRow.status !== "active") return suspensionSnapshot(sql, userId, meRow.status);
   const plus = meRow ? asBool(meRow.plus) : false;
   const usedRows = await sql<{ n: number }>`
     select count(*) as n from vela_swipes
@@ -461,11 +462,15 @@ export const saveProfile = createServerFn({ method: "POST" })
     const me = parsed.me;
     // A suspended person can't edit their way out, and a deleted + re-created
     // profile starts suspended while an age suspension is still open.
+    // Only the insert uses this status; an existing row keeps its own.
     const isNew = (await sql`select 1 from vela_profiles where user_id = ${context.userId}`).length === 0;
-    const suspended =
-      (await statusOf(sql, context.userId)) !== "active" ||
-      (await openAgeSuspension(sql, context.userId)) ||
-      (isNew && (await (await ageReview()).carryOverSuspension(sql, context.userId)));
+    const carried = isNew ? await (await ageReview()).carryOverSuspension(sql, context.userId) : null;
+    const newStatus =
+      carried === "ban"
+        ? "banned"
+        : carried === "age" || (await openAgeSuspension(sql, context.userId))
+          ? "suspended_age"
+          : "active";
     await sql.query(
       `insert into vela_profiles (user_id, name, age, city, orbit, values, prompts, photo, status, adult_confirmed_at)
        values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, now())
@@ -487,7 +492,7 @@ export const saveProfile = createServerFn({ method: "POST" })
         JSON.stringify(me.values),
         JSON.stringify(me.prompts),
         me.photo,
-        suspended ? "suspended_age" : "active",
+        newStatus,
       ],
     );
     // Paid before the profile existed (or re-created it): carry VELA+ over.
@@ -785,7 +790,9 @@ export const deleteProfile = createServerFn({ method: "POST" })
     await sql`delete from vela_subscriptions where user_id = ${id}`;
     // An open age suspension must not be dodged by deleting and signing in
     // again: keep only a keyed hash of the login identity (max. 12 months).
-    if (await openAgeSuspension(sql, id)) await (await ageReview()).rememberSuspendedIdentity(sql, id);
+    // Same for a rule ban.
+    if ((await statusOf(sql, id)) === "banned") await (await ageReview()).rememberSuspendedIdentity(sql, id, "ban");
+    else if (await openAgeSuspension(sql, id)) await (await ageReview()).rememberSuspendedIdentity(sql, id);
     await sql`delete from vela_messages where pair_a = ${id} or pair_b = ${id}`;
     await sql`delete from vela_swipes where from_user = ${id} or to_user = ${id}`;
     await sql`delete from vela_blocks where from_user = ${id} or to_user = ${id}`;
@@ -907,8 +914,12 @@ export const uploadIdDocument = createServerFn({ method: "POST" })
   .validator((input: { image?: string }) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
-    if ((await statusOf(sql, context.userId)) === "active") {
+    const status = await statusOf(sql, context.userId);
+    if (status === "active") {
       return { error: "Dein Konto ist nicht gesperrt.", snapshot: await snapshot(sql, context.userId) };
+    }
+    if (status === "banned") {
+      return { error: "Diese Sperre lässt sich nicht per Ausweis aufheben.", snapshot: await snapshot(sql, context.userId) };
     }
     const image = String(data?.image ?? "");
     const prefix = "data:image/jpeg;base64,";

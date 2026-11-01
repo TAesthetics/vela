@@ -47,6 +47,12 @@ export type AdminFlag = {
   createdAt: string;
 };
 
+export type AdminBanned = {
+  userId: string;
+  name: string | null;
+  since: string;
+};
+
 export type AdminClientError = {
   fingerprint: string;
   message: string;
@@ -66,6 +72,7 @@ export type AdminData =
       checks: AdminIdCheck[];
       reports: AdminReport[];
       flags: AdminFlag[];
+      banned: AdminBanned[];
       errors: AdminClientError[];
     };
 
@@ -101,6 +108,12 @@ async function load(sql: Sql): Promise<AdminData> {
     order by (r.reason = 'minor') desc, r.created_at asc
     limit 100
   `;
+  const banned = await sql<{ user_id: string; name: string | null; suspended_at: unknown }>`
+    select user_id, name, suspended_at from vela_profiles
+    where status = 'banned'
+    order by suspended_at desc nulls last
+    limit 100
+  `;
   const errors = await sql<{ fingerprint: string; message: string; stack: string; path: string; platform: string; release: string; count: unknown; first_seen: unknown; last_seen: unknown }>`
     select fingerprint, message, stack, path, platform, release, count, first_seen, last_seen
     from vela_client_errors
@@ -109,6 +122,7 @@ async function load(sql: Sql): Promise<AdminData> {
   `;
   return {
     allowed: true,
+    banned: banned.map((row) => ({ userId: row.user_id, name: row.name, since: iso(row.suspended_at) })),
     errors: errors.map((row) => ({
       fingerprint: row.fingerprint,
       message: row.message,
@@ -180,10 +194,13 @@ export const decideIdCheck = createServerFn({ method: "POST" })
     return load(sql);
   });
 
-/** Manually suspend (age) the person behind a report, or close the report. */
+/**
+ * Close a report and optionally act on the person behind it: suspend (age,
+ * liftable by ID upload) or ban (rule violation, only the operator lifts it).
+ */
 export const resolveReport = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { id?: string; suspend?: boolean }) => input)
+  .validator((input: { id?: string; suspend?: boolean; ban?: boolean }) => input)
   .handler(async ({ context, data }): Promise<AdminData> => {
     const sql = await getSql();
     if (!(await isAdmin(sql, context.userId))) return { allowed: false };
@@ -196,6 +213,35 @@ export const resolveReport = createServerFn({ method: "POST" })
       const age = await import("@/lib/vela/age-review.server");
       await age.suspendForAge(sql, userId);
       await age.recordFlag(sql, userId, "operator", "suspended", ["Vom Betreiber gesperrt (Alter)"]);
+    } else if (userId && data?.ban === true) {
+      const age = await import("@/lib/vela/age-review.server");
+      await age.banForRules(sql, userId);
+      await age.recordFlag(sql, userId, "operator", "banned", ["Vom Betreiber gesperrt (Regelverstoß)"]);
+    }
+    return load(sql);
+  });
+
+/** Lift a rule ban. An age suspension that is still open takes over again. */
+export const liftRuleBan = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { userId?: string }) => input)
+  .handler(async ({ context, data }): Promise<AdminData> => {
+    const sql = await getSql();
+    if (!(await isAdmin(sql, context.userId))) return { allowed: false };
+    const userId = String(data?.userId ?? "");
+    const age = await import("@/lib/vela/age-review.server");
+    if (userId && (await age.liftBan(sql, userId))) {
+      await age.recordFlag(sql, userId, "operator", "unbanned", ["Sperre (Regelverstoß) aufgehoben"]);
+      const open = await sql`
+        select 1 from vela_age_flags f
+        where f.user_id = ${userId} and f.action = 'suspended'
+          and not exists (
+            select 1 from vela_id_checks c
+            where c.user_id = f.user_id and c.status = 'approved' and c.decided_at > f.created_at
+          )
+        limit 1
+      `;
+      if (open.length > 0) await age.suspendForAge(sql, userId);
     }
     return load(sql);
   });

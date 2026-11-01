@@ -44,7 +44,54 @@ function encodeIdPhoto(file: File) {
   });
 }
 
+/** In-app account deletion (Apple 5.1.1(v)) also while suspended or banned. */
+function DeleteAccount() {
+  const removeProfile = useVela((state) => state.removeProfile);
+  const [arm, setArm] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (arm) void removeProfile();
+        else setArm(true);
+      }}
+      className="h-11 text-sm text-muted"
+    >
+      {arm ? "Konto wirklich löschen" : "Konto löschen"}
+    </button>
+  );
+}
+
+function Banned() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-8">
+      <Wordmark />
+      <ShieldAlert className="mt-8 size-8 text-ember" />
+      <h1 className="mt-4 font-display text-3xl leading-tight text-paper">Dein Konto ist gesperrt.</h1>
+      <p className="mt-4 text-base text-muted">
+        Nach einer Meldung hat der Betreiber festgestellt, dass du gegen die Regeln von Vela verstoßen hast, etwa durch
+        Belästigung, Beleidigungen, Hass, Spam oder Betrug. Solange die Sperre besteht, sieht dich niemand und du kannst
+        nicht swipen oder schreiben.
+      </p>
+      <p className="mt-3 text-base text-muted">
+        Wenn du das für einen Irrtum hältst, schreib an die E-Mail-Adresse im Impressum. Dein Konto kannst du hier
+        jederzeit löschen; eine neue Anmeldung mit derselben E-Mail-Adresse ist dann bis zu 12 Monate weiter gesperrt.
+      </p>
+      <button type="button" onClick={() => void signOut("/")} className="mt-8 h-11 text-sm text-muted">
+        Abmelden
+      </button>
+      <DeleteAccount />
+      <LegalLinks className="mt-4" />
+    </div>
+  );
+}
+
 export function Suspended({ suspension }: { suspension: Suspension }) {
+  if (suspension.reason === "ban") return <Banned />;
+  return <AgeSuspended suspension={suspension} />;
+}
+
+function AgeSuspended({ suspension }: { suspension: Suspension }) {
   const uploadId = useVela((state) => state.uploadId);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -120,6 +167,7 @@ export function Suspended({ suspension }: { suspension: Suspension }) {
       <button type="button" onClick={() => void signOut("/")} className="mt-8 h-11 text-sm text-muted">
         Abmelden
       </button>
+      <DeleteAccount />
       <LegalLinks className="mt-4" />
     </div>
   );

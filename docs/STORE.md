@@ -250,8 +250,9 @@ Push ist vorbereitet, aber aus (`pushNotificationsEnabled` in `src/lib/native.ts
 
 - [ ] Produktions-URL festgelegt, `BETTER_AUTH_URL` zeigt darauf
 - [ ] `npm run native:setup` mit `VELA_APP_URL` ausgeführt
-- [ ] „Mit Apple anmelden“ ergänzt (sonst Ablehnung nach 4.8 wahrscheinlich)
-- [ ] Wortfilter für anstößige Inhalte (Apple 1.2), Meldungen innerhalb von 24 h
+- [x] „Mit Apple anmelden“ derzeit nicht nötig (nur E-Mail + Passwort); erst bei Social-Login ergänzen (4.8)
+- [x] Wortfilter, Blockieren, Melden und Sperre wegen Regelverstoß auf /admin/age (Apple 1.2)
+- [ ] Meldungen innerhalb von 24 h auf /admin/age bearbeiten (laufende Aufgabe)
 - [ ] Demo-Konto (E-Mail + Passwort) mit Profil (plus zweites Testprofil)
 - [ ] Datenschutz- und Impressum-URL erreichbar
 - [ ] Apple: Altersfreigabe 18+, Datenschutz-Labels, Screenshots, Review-Hinweise
