@@ -16,8 +16,8 @@ export function isWorkspacePreview(): boolean {
 /**
  * Self-hosted deployment outside the Grok platform (own Vercel project, Railway).
  * Railway sets RAILWAY_ENVIRONMENT_NAME on every service; VELA_SELF_HOSTED=1
- * forces it elsewhere (own Vercel project, see docs/VERCEL.md). Self-hosted apps use their own Google/X OAuth credentials instead
- * of the Grok auth broker (see `auth/server.ts` and docs/RAILWAY.md).
+ * forces it elsewhere (own Vercel project, see docs/VERCEL.md). Self-hosted apps sign in with
+ * e-mail + password instead of the Grok auth broker (see `auth/server.ts` and `auth/email-password.ts`).
  */
 export function isSelfHosted(): boolean {
   return Boolean(

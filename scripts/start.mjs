@@ -33,12 +33,7 @@ if (!env("BETTER_AUTH_URL") && !env("RAILWAY_PUBLIC_DOMAIN")) {
     "BETTER_AUTH_URL fehlt (öffentliche https-Adresse, oder in Railway eine Domain generieren)",
   );
 }
-const google = env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET");
-const x = env("X_CLIENT_ID") && env("X_CLIENT_SECRET");
-if (!google && !x)
-  problems.push(
-    "Kein Login-Anbieter: GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET (und/oder X_CLIENT_ID + X_CLIENT_SECRET) setzen",
-  );
+// Sign-in is e-mail + password (Better Auth, own DB): no OAuth keys needed.
 const serverEntry = join(root, ".output/server/index.mjs");
 if (!existsSync(serverEntry)) {
   problems.push(
