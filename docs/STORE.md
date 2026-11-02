@@ -6,7 +6,7 @@ Diese Anleitung bringt VELA als iOS- und Android-App in die Stores. Stand: Oktob
 
 - **Capacitor 8** (iOS + Android). App-ID / Bundle-ID: **`at.vela.app`**, App-Name: **VELA**.
 - VELA braucht seinen Server (Anmeldung, Datenbank, Serverfunktionen). Die Store-App ist deshalb eine native Hülle, die die **veröffentlichte Web-App von `VELA_APP_URL` lädt**. Jede Änderung, die du auf `main` veröffentlichst, ist sofort auch in den Apps. Ein neuer Store-Upload ist nur bei nativen Änderungen nötig (Icon, Plugins, Berechtigungen).
-- **Anmeldung:** Google und X blockieren die Anmeldung in eingebetteten Webviews. In der App öffnet sich deshalb der **System-Browser** (`/auth/native`). Danach kommt die Sitzung über den Deep Link **`vela://auth`** in die App zurück. Der Weg ist doppelt abgesichert: Die App schickt nur den Hash eines geheimen Prüfwerts mit, der Rückweg trägt einen Einmal-Code, und beides ist nur 5 Minuten gültig. Auf der Website ändert sich nichts.
+- **Anmeldung:** nur E-Mail und Passwort, direkt in der App (kein Wechsel in den Browser). Der Weg über den **System-Browser** (`/auth/native`) mit Rücksprung per Deep Link **`vela://auth`** ist nur für einen späteren Social-Login vorbereitet (Google und X blockieren die Anmeldung in eingebetteten Webviews) und derzeit ungenutzt. Er ist doppelt abgesichert: Die App schickt nur den Hash eines geheimen Prüfwerts mit, der Rückweg trägt einen Einmal-Code, und beides ist nur 5 Minuten gültig.
 - **Native Extras (gegen Apple-Regel 4.2):**
   - Splash-Screen und dunkle Statusleiste;
   - Haptik beim Match;
@@ -31,7 +31,7 @@ Bei jedem Push auf `main` baut `.github/workflows/ci.yml` eine installierbare An
    Das legt `ios/` und `android/` an, erzeugt Icons und Splash-Screens, trägt den Deep Link `vela://auth` ein, setzt die Texte für Kamera und Fotos sowie „nur Hochformat“ (iPhone) und synchronisiert alles. Du kannst den Befehl beliebig oft wiederholen.
 3. Öffnen: `npm run native:ios` (Xcode, nur auf dem Mac) bzw. `npm run native:android` (Android Studio).
 
-Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Google/X-Rückleitung wie die Website (`/api/auth/oauth2/callback/grok-google` bzw. `grok-x`, siehe `docs/VERCEL.md`, Schritt 4). Wichtig ist nur, dass `BETTER_AUTH_URL` im Hosting dieselbe Domain ist wie `VELA_APP_URL`.
+Für die Anmeldung musst du nichts extra einrichten: Die App meldet sich mit E-Mail und Passwort genauso an wie die Website. Wichtig ist nur, dass `BETTER_AUTH_URL` im Hosting dieselbe Domain ist wie `VELA_APP_URL`.
 
 ## 2. Vor der Einreichung: offene Punkte
 
@@ -107,8 +107,8 @@ Für die Anmeldung musst du nichts extra einrichten: Die App nutzt dieselbe Goog
 
    | Apple-Kategorie | Was VELA speichert | Verknüpft mit Person | Tracking | Zweck |
    |---|---|---|---|---|
-   | Kontaktinformationen → Name | Name aus Google/X, Vorname im Profil | ja | nein | App-Funktionalität |
-   | Kontaktinformationen → E-Mail-Adresse | E-Mail aus Google/X (Login, Admin-Zugang) | ja | nein | App-Funktionalität |
+   | Kontaktinformationen → Name | Vorname im Profil | ja | nein | App-Funktionalität |
+   | Kontaktinformationen → E-Mail-Adresse | E-Mail-Adresse (Anmeldung, Admin-Zugang) | ja | nein | App-Funktionalität |
    | Nutzerinhalte → Fotos oder Videos | optionales Porträt; Ausweisfoto nur bei Alterssperre, höchstens 30 Tage | ja | nein | App-Funktionalität |
    | Nutzerinhalte → E-Mails oder Textnachrichten | Chatnachrichten zwischen Matches | ja | nein | App-Funktionalität |
    | Nutzerinhalte → Andere Nutzerinhalte | Profilsätze, Stadt, Alter, Orbit, Werte, Meldungen | ja | nein | App-Funktionalität |
@@ -254,6 +254,6 @@ Push ist vorbereitet, aber aus (`pushNotificationsEnabled` in `src/lib/native.ts
 - [x] Wortfilter, Blockieren, Melden und Sperre wegen Regelverstoß auf /admin/age (Apple 1.2)
 - [ ] Meldungen innerhalb von 24 h auf /admin/age bearbeiten (laufende Aufgabe)
 - [ ] Demo-Konto (E-Mail + Passwort) mit Profil (plus zweites Testprofil)
-- [ ] Datenschutz- und Impressum-URL erreichbar
+- [x] Datenschutz- und Impressum-URL erreichbar (`/datenschutz`, `/impressum`, `/agb`)
 - [ ] Apple: Altersfreigabe 18+, Datenschutz-Labels, Screenshots, Review-Hinweise
 - [ ] Google: geschlossener Test 12 Tester / 14 Tage, Data safety, IARC, Zielgruppe 18+
