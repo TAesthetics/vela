@@ -80,6 +80,8 @@ export async function purgeExpired(sql: Sql) {
   await purgeOldIdImages(sql);
   const { purgeOldClientErrors } = await import("@/lib/vela/client-errors.server");
   await purgeOldClientErrors(sql);
+  // Reset links: valid 24 h, kept at most 7 days after that.
+  await sql`delete from vela_password_resets where created_at < now() - interval '8 days'`;
   await sql`delete from vela_reports where created_at < now() - interval '12 months'`;
   await sql`delete from vela_deleted_identities where created_at < now() - interval '12 months'`;
   await sql`

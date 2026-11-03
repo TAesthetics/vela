@@ -24,7 +24,10 @@ function Datenschutz() {
           Jahre alt bist. Wir speichern deine E-Mail-Adresse, eine Nutzerkennung und dein Passwort nur als
           nicht umkehrbaren Hash (wir kennen dein Passwort nie). Es gibt keine Anmeldung über Google, X oder
           andere Dritte, und wir schicken keine Werbe- oder Bestätigungsmails. Passwort vergessen? Schreib uns
-          an {OPERATOR.email}.
+          von deiner Konto-Adresse an {OPERATOR.email}; wir antworten mit einem Link zum Zurücksetzen, der 24
+          Stunden und nur einmal gilt. Von diesem Link speichern wir nur einen nicht umkehrbaren Hash; benutzte und
+          abgelaufene Links löschen wir spätestens nach 7 Tagen. Nach dem Zurücksetzen wirst du auf allen Geräten
+          abgemeldet.
         </p>
         <p>
           Rechtsgrundlage: Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO). Nach der Anmeldung setzen

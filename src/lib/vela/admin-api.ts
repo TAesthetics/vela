@@ -245,3 +245,31 @@ export const liftRuleBan = createServerFn({ method: "POST" })
     }
     return load(sql);
   });
+
+export type AdminResetLink = { ok: true; link: string; expiresAt: string } | { ok: false; error: string };
+
+/**
+ * One-time password reset link for a person who wrote in from their account's
+ * e-mail address (no mail service, so the operator sends the link by hand).
+ */
+export const createPasswordResetLink = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { email?: string }) => input)
+  .handler(async ({ context, data }): Promise<AdminResetLink> => {
+    const sql = await getSql();
+    if (!(await isAdmin(sql, context.userId))) return { ok: false, error: "Kein Zugriff." };
+    const reset = await import("@/lib/vela/password-reset.server");
+    const created = await reset.createResetToken(sql, String(data?.email ?? ""), context.userId);
+    if (!created.ok) return created;
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const { selfHostedPublicUrl } = await import("@/lib/env.server");
+    const request = getRequest();
+    let origin = selfHostedPublicUrl() ?? "";
+    if (request) {
+      const url = new URL(request.url);
+      const host = request.headers.get("x-forwarded-host") ?? url.host;
+      const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+      if (host) origin = `${proto}://${host}`;
+    }
+    return { ok: true, link: `${origin}/passwort-neu?token=${created.token}`, expiresAt: created.expiresAt };
+  });

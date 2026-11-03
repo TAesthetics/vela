@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { decideIdCheck, liftRuleBan, loadAdmin, resolveReport, type AdminData } from "@/lib/vela/admin-api";
+import {
+  createPasswordResetLink,
+  decideIdCheck,
+  liftRuleBan,
+  loadAdmin,
+  resolveReport,
+  type AdminData,
+  type AdminResetLink,
+} from "@/lib/vela/admin-api";
 import { REPORT_REASONS } from "@/lib/vela/data";
 
 export const Route = createFileRoute("/admin/age")({
@@ -162,6 +170,8 @@ function AdminAge() {
         ))}
       </ul>
 
+      <ResetLinkTool />
+
       <h2 className="mt-10 font-display text-2xl">Alters-Hinweise (letzte 50)</h2>
       <ul className="mt-4 grid gap-2 text-sm">
         {data.flags.map((flag) => (
@@ -196,6 +206,65 @@ function AdminAge() {
         ))}
       </ul>
     </Shell>
+  );
+}
+
+function ResetLinkTool() {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<AdminResetLink | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function create(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setCopied(false);
+    try {
+      setResult(await createPasswordResetLink({ data: { email } }));
+    } catch {
+      setResult({ ok: false, error: "Hat nicht geklappt. Bitte nochmal versuchen." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <h2 className="mt-10 font-display text-2xl">Passwort zurücksetzen</h2>
+      <p className="mt-1 text-xs text-muted">
+        Nur wenn die Anfrage von genau dieser Konto-Adresse kam. Der Link gilt 24 Stunden und nur einmal; schick ihn
+        als Antwort auf diese Mail. Alte Links derselben Person werden ungültig.
+      </p>
+      <form onSubmit={create} className="mt-4 flex flex-wrap gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="E-Mail des Kontos"
+          className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-sm"
+        />
+        <button type="submit" disabled={busy || !email.trim()} className="h-10 rounded-full border border-line px-4 text-xs disabled:opacity-50">
+          {busy ? "…" : "Link erstellen"}
+        </button>
+      </form>
+      {result && !result.ok && <p className="mt-2 text-sm text-ember">{result.error}</p>}
+      {result?.ok && (
+        <div className="mt-3 rounded-xl bg-surface p-3 text-sm">
+          <span className="block break-all font-mono text-xs">{result.link}</span>
+          <span className="mt-1 block text-xs text-muted">Gültig bis {when(result.expiresAt)}</span>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(result.link).then(() => setCopied(true));
+            }}
+            className="mt-2 h-9 rounded-full border border-line px-4 text-xs"
+          >
+            {copied ? "Kopiert" : "Kopieren"}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

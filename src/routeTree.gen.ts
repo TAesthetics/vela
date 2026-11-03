@@ -15,6 +15,7 @@ import { Route as DatenschutzRouteImport } from './routes/datenschutz'
 import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as ImpressumRouteImport } from './routes/impressum'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PasswortNeuRouteImport } from './routes/passwort-neu'
 import { Route as AdminAgeRouteImport } from './routes/admin/age'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AuthNativeRouteImport } from './routes/auth/native'
@@ -51,6 +52,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PasswortNeuRoute = PasswortNeuRouteImport.update({
+  id: '/passwort-neu',
+  path: '/passwort-neu',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAgeRoute = AdminAgeRouteImport.update({
   id: '/admin/age',
   path: '/admin/age',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
+  '/passwort-neu': typeof PasswortNeuRoute
   '/admin/age': typeof AdminAgeRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
+  '/passwort-neu': typeof PasswortNeuRoute
   '/admin/age': typeof AdminAgeRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/healthz': typeof HealthzRoute
   '/impressum': typeof ImpressumRoute
   '/login': typeof LoginRoute
+  '/passwort-neu': typeof PasswortNeuRoute
   '/admin/age': typeof AdminAgeRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/impressum'
     | '/login'
+    | '/passwort-neu'
     | '/admin/age'
     | '/api/client-error'
     | '/auth/native'
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/impressum'
     | '/login'
+    | '/passwort-neu'
     | '/admin/age'
     | '/api/client-error'
     | '/auth/native'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/healthz'
     | '/impressum'
     | '/login'
+    | '/passwort-neu'
     | '/admin/age'
     | '/api/client-error'
     | '/auth/native'
@@ -166,6 +178,7 @@ export interface RootRouteChildren {
   HealthzRoute: typeof HealthzRoute
   ImpressumRoute: typeof ImpressumRoute
   LoginRoute: typeof LoginRoute
+  PasswortNeuRoute: typeof PasswortNeuRoute
   AdminAgeRoute: typeof AdminAgeRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   AuthNativeRoute: typeof AuthNativeRoute
@@ -217,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/passwort-neu': {
+      id: '/passwort-neu'
+      path: '/passwort-neu'
+      fullPath: '/passwort-neu'
+      preLoaderRoute: typeof PasswortNeuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/age': {
       id: '/admin/age'
       path: '/admin/age'
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   HealthzRoute: HealthzRoute,
   ImpressumRoute: ImpressumRoute,
   LoginRoute: LoginRoute,
+  PasswortNeuRoute: PasswortNeuRoute,
   AdminAgeRoute: AdminAgeRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
   AuthNativeRoute: AuthNativeRoute,

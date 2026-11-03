@@ -166,11 +166,11 @@ export function SignInPanel() {
           </form>
           {mode === "signin" && (
             <p className="mt-3 text-xs text-muted">
-              Passwort vergessen? Schreib an{" "}
-              <a href={`mailto:${OPERATOR.email}`} className="underline">
+              Passwort vergessen? Schreib von deiner Konto-Adresse an{" "}
+              <a href={`mailto:${OPERATOR.email}?subject=${encodeURIComponent("Vela: Passwort vergessen")}`} className="underline">
                 {OPERATOR.email}
               </a>
-              .
+              . Du bekommst einen Link, mit dem du ein neues Passwort setzt.
             </p>
           )}
           {GROK_PROVIDERS.length > 0 && (
