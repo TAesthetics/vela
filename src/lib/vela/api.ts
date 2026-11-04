@@ -131,7 +131,13 @@ async function isBlocked(sql: Sql, a: string, b: string) {
 async function plusAvailable() {
   // Server-only import, kept out of the client bundle.
   const { isWorkspacePreview } = await import("@/lib/env.server");
-  return isWorkspacePreview();
+  if (!isWorkspacePreview()) return false;
+  // Belt and braces: the free test switch must never work on a real deployment,
+  // even if VELA_SELF_HOSTED was forgotten there. Real billing (Stripe) or a
+  // Vercel production build means Plus is only available by paying.
+  if (process.env.VERCEL_ENV === "production") return false;
+  if ((await billingServer()).stripeConfigured()) return false;
+  return true;
 }
 
 function billingServer() {
