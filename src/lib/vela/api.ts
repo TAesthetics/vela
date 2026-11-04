@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { FILTER_MESSAGE, isObjectionable } from "./content-filter";
+import { cleanJpegDataUrl } from "./jpeg";
 import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import {
@@ -414,7 +415,9 @@ function cleanProfile(input: unknown): { me: Me } | { error: string } {
     if (!value.startsWith("data:image/jpeg;base64,") || value.length > 120_000) {
       return { error: "Das Porträt ist zu groß. Ein kleineres Bild bitte." };
     }
-    photo = value;
+    // Checks it is a real JPEG and strips EXIF/GPS and other metadata.
+    photo = cleanJpegDataUrl(value, 120_000);
+    if (!photo) return { error: "Das Porträt ist beschädigt. Bitte ein anderes Bild." };
   }
   return {
     me: {

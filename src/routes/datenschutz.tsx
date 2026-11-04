@@ -39,7 +39,8 @@ function Datenschutz() {
         <p>
           Für dein Profil speichern wir: Vorname bzw. Anzeigename, Alter, Stadt, deinen „Orbit“ (was du
           suchst), drei Werte, zwei Antworten auf Fragen und optional ein Porträtfoto. Dein Foto wird
-          anderen erst gezeigt, wenn ihr beide genug Nachrichten geschrieben habt („Schleier“).
+          anderen erst gezeigt, wenn ihr beide genug Nachrichten geschrieben habt („Schleier“). Eingebettete
+          Bild-Metadaten (z. B. GPS-Standort, Kameramodell, Kommentare) entfernen wir vor dem Speichern.
         </p>
         <p>
           Die Nutzung einer Dating-App und deine Angaben können Rückschlüsse auf dein Sexualleben oder
