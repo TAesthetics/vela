@@ -1,0 +1,8 @@
+# VELA: public pages may be indexed; operator, password-reset, sign-in
+# callbacks and API routes stay out of search engines.
+User-agent: *
+Disallow: /admin
+Disallow: /passwort-neu
+Disallow: /api/
+Disallow: /auth/
+Allow: /
