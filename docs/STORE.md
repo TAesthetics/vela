@@ -164,6 +164,7 @@ Für die Anmeldung musst du nichts extra einrichten: Die App meldet sich mit E-M
      | App-Aktivitäten → In-App-Interaktionen (Swipes, Matches, Blockierungen) | ja | nein | App-Funktionen | nein |
 
      - Daten werden bei der Übertragung **verschlüsselt** (HTTPS): ja.
+     - Die Android-App macht **keine Sicherung** (kein Google-Drive-/adb-Backup): `npm run native:setup` setzt `android:allowBackup="false"`, damit Anmeldung und Chats nicht in einem Backup oder auf einem anderen Gerät landen.
      - **Löschung möglich:** ja, in der App (Ich → „Konto löschen“) und per Web-Link bzw. E-Mail.
      - Hosting (Vercel) und Datenbank (Neon) sind Auftragsverarbeiter. Das gilt laut Google nicht als „Teilen“.
 3. **Store-Eintrag:** Texte aus Abschnitt 5, App-Symbol 512×512 und Vorstellungsgrafik 1024×500. Beide erzeugt `npm run native:assets` im Ordner `store-assets/`. Dazu mindestens 2 Handy-Screenshots.

@@ -8,7 +8,8 @@
  * 2. `cap add ios` / `cap add android` if the folders don't exist yet
  * 3. renders icons + splash screens (scripts/native-assets.mjs)
  * 4. patches Info.plist / AndroidManifest (vela:// deep link for login,
- *    camera/photo texts, portrait-only iPhone, dark splash colors)
+ *    camera/photo texts, portrait-only iPhone, dark splash colors, no
+ *    Android backup of the session/chats)
  * 5. `cap sync`
  */
 import { execSync } from "node:child_process";
@@ -104,6 +105,14 @@ if (existsSync(plist)) {
 // ── Android ─────────────────────────────────────────────────────────────────
 const manifest = "android/app/src/main/AndroidManifest.xml";
 if (existsSync(manifest)) {
+  // No Android backup (cloud or adb): the WebView holds the login session and
+  // cached chats, which must not land in a Google Drive backup or be copied to
+  // another device. Matches "Konto/Daten nur auf dem VELA-Server" in STORE.md.
+  edit(manifest, (s) =>
+    s
+      .replace(/android:allowBackup="true"/, 'android:allowBackup="false"')
+      .replace(/(<application(?![^>]*android:fullBackupContent)[^>]*?android:allowBackup="false")/, '$1\n        android:fullBackupContent="false"'),
+  );
   edit(manifest, (s) =>
     s.includes(`android:scheme="${SCHEME}"`)
       ? s
