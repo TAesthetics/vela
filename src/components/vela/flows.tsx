@@ -19,7 +19,7 @@ import { SafetyMenu } from "@/components/vela/safety";
 import { LegalLinks } from "@/components/vela/legal";
 import { exportMyData } from "@/lib/vela/api";
 import { isNativeApp } from "@/lib/native";
-import { changeMyPassword } from "@/lib/auth/client";
+import { changeMyPassword, signOutOtherDevices } from "@/lib/auth/client";
 
 export function Signals({
   onChat,
@@ -445,6 +445,54 @@ function ChangePassword() {
   );
 }
 
+function SignOutOtherDevices() {
+  const [arm, setArm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const run = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      await signOutOtherDevices();
+      setArm(false);
+      setMessage("Alle anderen Geräte werden abgemeldet (spätestens in 5 Minuten). Dieses bleibt angemeldet.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Das hat nicht geklappt. Bitte versuch es noch einmal.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2">
+      {arm ? (
+        <div className="grid gap-2">
+          <p className="text-sm text-muted">
+            Überall sonst abmelden, zum Beispiel wenn ein Handy verloren ging? Dieses Gerät bleibt angemeldet.
+          </p>
+          <PrimaryButton type="button" disabled={busy} onClick={() => void run()}>
+            {busy ? "Wird abgemeldet…" : "Ja, andere Geräte abmelden"}
+          </PrimaryButton>
+          <button type="button" onClick={() => setArm(false)} className="h-11 text-sm text-muted">
+            Abbrechen
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setMessage("");
+            setArm(true);
+          }}
+          className="block h-11 text-sm text-muted"
+        >
+          Auf allen anderen Geräten abmelden
+        </button>
+      )}
+      {message && <p className="text-sm text-ember">{message}</p>}
+    </div>
+  );
+}
+
 export function MeScreen({ onPlus }: { onPlus: () => void }) {
   const me = useVela((state) => state.me);
   const plus = useVela((state) => state.plus);
@@ -588,6 +636,7 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
       </div>
 
       <ChangePassword />
+      <SignOutOtherDevices />
 
       <button
         type="button"

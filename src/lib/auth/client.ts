@@ -200,6 +200,15 @@ export async function changeMyPassword(currentPassword: string, newPassword: str
   if (error) throw new Error(emailAuthErrorMessage(error));
 }
 
+/**
+ * Sign out every other device of the signed-in account (e.g. a lost phone);
+ * this device stays signed in. Throws a German message on failure.
+ */
+export async function signOutOtherDevices(): Promise<void> {
+  const { error } = await authClient.revokeOtherSessions();
+  if (error) throw new Error(emailAuthErrorMessage(error));
+}
+
 /** Create an account with e-mail + password (signed in right after). */
 export async function signUpWithEmail(email: string, password: string): Promise<void> {
   const clean = email.trim();
