@@ -25,6 +25,18 @@ describe("veil", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     assert.match(apiSrc, /photo: unveiled \? row\.photo : null/);
   });
+
+  it("does not SELECT other people's photos for the deck or swipe target", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const deck = apiSrc.slice(apiSrc.indexOf("const deckRows"), apiSrc.indexOf("const inboundRows"));
+    assert.ok(deck.includes("from vela_profiles p"), "deck query missing");
+    assert.ok(!/\bp\.photo\b/.test(deck), "deck must not load p.photo (veil never opens there)");
+    const swipe = apiSrc.slice(apiSrc.indexOf("export const swipe"), apiSrc.indexOf("export const undoPass"));
+    assert.ok(swipe.includes("from vela_profiles where user_id"), "swipe target query missing");
+    assert.ok(!/prompts, photo, plus/.test(swipe), "swipe target must not load photo");
+    // Matches are the only place other portraits leave the DB — and only after unveil.
+    assert.match(apiSrc, /const matchRows[\s\S]*?p\.photo[\s\S]*?from vela_swipes mine/);
+  });
 });
 
 describe("resonance", () => {

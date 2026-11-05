@@ -284,8 +284,11 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
            or (b.from_user = p.user_id and b.to_user = ${userId})
       )
   `;
+  // No photo column here on purpose: Person has none, and the veil never opens
+  // in the deck. Loading JPEG blobs for 40 cards would waste memory and risk a
+  // future regression that ships them to the client.
   const deckRows = await sql<ProfileRow>`
-    select p.user_id, p.name, p.age, p.city, p.orbit, p.values, p.prompts, p.photo, p.plus,
+    select p.user_id, p.name, p.age, p.city, p.orbit, p.values, p.prompts, p.plus,
       exists (
         select 1 from vela_swipes s
         where s.from_user = p.user_id and s.to_user = ${userId} and s.direction = 'spark'
@@ -350,7 +353,8 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
       }));
     // The veil lifts only when BOTH people have each written VEIL_AFTER chat
     // messages in this match. Spark notes never count. Enforced here, server-side:
-    // the photo is not sent to the client until then.
+    // matchRows is the only place other people's photos are selected, and the
+    // photo is not sent to the client until both sides clear VEIL_AFTER.
     const chat = messages.filter((message) => message.kind === "message");
     const mineCount = chat.filter((message) => message.from === "me").length;
     const theirCount = chat.filter((message) => message.from === "them").length;
@@ -527,8 +531,9 @@ export const swipe = createServerFn({ method: "POST" })
     }
     const sql = await getSql();
     const day = berlinDay();
+    // Prompts only — never pull the portrait for a swipe (veil stays closed).
     const target = await sql<ProfileRow>`
-      select user_id, name, age, city, orbit, values, prompts, photo, plus
+      select user_id, name, age, city, orbit, values, prompts, plus
       from vela_profiles where user_id = ${toUser}
     `;
     if (!target[0]) return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };

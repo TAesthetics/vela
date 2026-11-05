@@ -1,9 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import type { Sql } from "@/lib/db";
+import { clientIp, consumeRateLimit, rateLimitKey } from "@/lib/vela/rate-limit.server";
 
 /** How long an operator-created reset link stays valid. */
 export const RESET_LINK_HOURS = 24;
+
+/** Public reset attempts per IP (DB-backed; holds across serverless instances). */
+export const RESET_ATTEMPT_LIMIT = { windowSec: 15 * 60, max: 10 } as const;
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -43,11 +47,27 @@ export type ResetResult = { ok: true } | { ok: false; error: string };
 /**
  * Set a new password with a valid link. Marks the link used and signs the
  * person out everywhere, so a stolen session can't stay logged in.
+ * Rate-limited per client IP via the shared rateLimit table.
  */
-export async function resetWithToken(sql: Sql, token: string, password: string): Promise<ResetResult> {
+export async function resetWithToken(
+  sql: Sql,
+  token: string,
+  password: string,
+  headers?: Headers | null,
+): Promise<ResetResult> {
   if (password.length < 8) return { ok: false, error: "Das Passwort braucht mindestens 8 Zeichen." };
   if (password.length > 128) return { ok: false, error: "Das Passwort darf höchstens 128 Zeichen haben." };
   if (!token || token.length > 200) return { ok: false, error: "Dieser Link ist ungültig." };
+
+  const allowed = await consumeRateLimit(
+    sql,
+    rateLimitKey("vela:password-reset", clientIp(headers)),
+    RESET_ATTEMPT_LIMIT,
+  );
+  if (!allowed) {
+    return { ok: false, error: "Zu viele Versuche. Bitte warte ein paar Minuten und öffne den Link nochmal." };
+  }
+
   const claimed = await sql<{ user_id: string }>`
     update vela_password_resets set used_at = now()
     where token_hash = ${hashToken(token)} and used_at is null and expires_at > now()
