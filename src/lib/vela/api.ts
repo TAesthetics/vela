@@ -190,6 +190,8 @@ async function statusOf(sql: Sql, userId: string) {
  */
 const MESSAGE_LIMITS = { perMinute: 20, perDay: 600 };
 const REPORTS_PER_DAY = 10;
+/** Profile saves (incl. photo uploads) per person: 30 per hour. */
+const PROFILE_SAVE_RULE = { windowSec: 3600, max: 30 };
 
 async function messageLimitHit(sql: Sql, userId: string) {
   const rows = await sql<{ minute: number | string; day: number | string }>`
@@ -473,6 +475,15 @@ export const saveProfile = createServerFn({ method: "POST" })
     const parsed = cleanProfile(data);
     if ("error" in parsed) return { error: parsed.error, snapshot: null };
     const sql = await getSql();
+    // Photos are stored as data URLs, so endless re-saves would bloat the DB.
+    // Counted in the shared rateLimit table so it holds on serverless.
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:profile-save:${context.userId}`, PROFILE_SAVE_RULE))) {
+      return {
+        error: "Du hast dein Profil gerade sehr oft gespeichert. Versuch es in ein paar Minuten noch einmal.",
+        snapshot: null,
+      };
+    }
     const me = parsed.me;
     // A suspended person can't edit their way out, and a deleted + re-created
     // profile starts suspended while an age suspension is still open.
