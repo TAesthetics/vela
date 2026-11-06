@@ -5,6 +5,7 @@ import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import {
   FREE_SWIPES,
+  swipeCapHit,
   emptySnapshot,
   ORBITS,
   PROMPT_BANK,
@@ -544,6 +545,15 @@ export const swipe = createServerFn({ method: "POST" })
       select direction from vela_swipes where from_user = ${context.userId} and to_user = ${toUser}
     `;
     if (existing[0]) return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+    const caps = await sql<{ minute: number | string; today: number | string }>`
+      select
+        count(*) filter (where created_at > now() - interval '1 minute') as minute,
+        count(*) filter (where day = ${day}) as today
+      from vela_swipes where from_user = ${context.userId}
+    `;
+    if (swipeCapHit(Number(caps[0]?.minute ?? 0), Number(caps[0]?.today ?? 0))) {
+      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+    }
     const me = await sql<{ plus: boolean | string }>`
       select plus from vela_profiles where user_id = ${context.userId}
     `;

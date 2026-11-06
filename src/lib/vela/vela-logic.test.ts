@@ -3,7 +3,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { isUnveiled, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
+import { swipeCapHit, SWIPE_CAPS, isUnveiled, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
 import { isObjectionable, normalizeForFilter } from "./content-filter.ts";
 
 describe("veil", () => {
@@ -100,5 +100,14 @@ describe("word filter", () => {
     ]) {
       assert.equal(isObjectionable(text), false, text);
     }
+  });
+});
+
+describe("swipeCapHit", () => {
+  it("lets normal use through and stops scripted bursts", () => {
+    assert.equal(swipeCapHit(5, 40), false);
+    assert.equal(swipeCapHit(SWIPE_CAPS.perMinute - 1, SWIPE_CAPS.perDay - 1), false);
+    assert.equal(swipeCapHit(SWIPE_CAPS.perMinute, 10), true);
+    assert.equal(swipeCapHit(0, SWIPE_CAPS.perDay), true);
   });
 });

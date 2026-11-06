@@ -82,6 +82,17 @@ export type Snapshot = {
 
 export const FREE_SWIPES = 12;
 
+/**
+ * Hard ceiling on swipes per person, also for VELA+ (which has no daily
+ * allowance). Far above human use, but stops scripts that mass-spark or
+ * scrape the deck.
+ */
+export const SWIPE_CAPS = { perMinute: 60, perDay: 1000 };
+
+export function swipeCapHit(lastMinute: number, today: number): boolean {
+  return lastMinute >= SWIPE_CAPS.perMinute || today >= SWIPE_CAPS.perDay;
+}
+
 /** Report reasons (stored id → German label). */
 export const REPORT_REASONS = [
   { id: "fake", label: "Fake-Profil" },
