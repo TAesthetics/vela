@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { FILTER_MESSAGE, isObjectionable } from "./content-filter";
-import { cleanJpegDataUrl } from "./jpeg";
+import { cleanJpegDataUrl, stripJpegMetadata } from "./jpeg";
 import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import {
@@ -192,6 +192,12 @@ const MESSAGE_LIMITS = { perMinute: 20, perDay: 600 };
 const REPORTS_PER_DAY = 10;
 /** Profile saves (incl. photo uploads) per person: 30 per hour. */
 const PROFILE_SAVE_RULE = { windowSec: 3600, max: 30 };
+/** ID-document uploads per person: 5 per hour (up to ~1.5 MB each). */
+const ID_UPLOAD_RULE = { windowSec: 3600, max: 5 };
+/** Self-service data export (Art. 15/20): 10 per hour. */
+const DATA_EXPORT_RULE = { windowSec: 3600, max: 10 };
+/** Stripe Checkout / Customer Portal session creation: 10 per hour. */
+const STRIPE_SESSION_RULE = { windowSec: 3600, max: 10 };
 
 async function messageLimitHit(sql: Sql, userId: string) {
   const rows = await sql<{ minute: number | string; day: number | string }>`
@@ -696,9 +702,13 @@ export const setPlus = createServerFn({ method: "POST" })
 export const startPlusCheckout = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ url: string | null; error: string | null }> => {
+    const sql = await getSql();
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:stripe-checkout:${context.userId}`, STRIPE_SESSION_RULE))) {
+      return { url: null, error: "Zu viele Bezahlversuche. Versuch es in ein paar Minuten noch einmal." };
+    }
     const stripe = await billingServer();
     if (!stripe.stripeConfigured()) return { url: null, error: "Zahlungen sind noch nicht eingerichtet." };
-    const sql = await getSql();
     if ((await statusOf(sql, context.userId)) !== "active") return { url: null, error: "Das geht gerade nicht." };
     const profile = await sql`select 1 from vela_profiles where user_id = ${context.userId}`;
     if (profile.length === 0) return { url: null, error: "Leg zuerst dein Profil an." };
@@ -721,9 +731,13 @@ export const startPlusCheckout = createServerFn({ method: "POST" })
 export const openPlusPortal = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ url: string | null; error: string | null }> => {
+    const sql = await getSql();
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:stripe-portal:${context.userId}`, STRIPE_SESSION_RULE))) {
+      return { url: null, error: "Zu viele Anfragen. Versuch es in ein paar Minuten noch einmal." };
+    }
     const stripe = await billingServer();
     if (!stripe.stripeConfigured()) return { url: null, error: "Zahlungen sind noch nicht eingerichtet." };
-    const sql = await getSql();
     const current = await stripe.billingOf(sql, context.userId);
     if (!current?.stripe_customer_id) return { url: null, error: "Du hast noch kein Abo." };
     try {
@@ -868,6 +882,10 @@ export const exportMyData = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const sql = await getSql();
     const id = context.userId;
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:data-export:${id}`, DATA_EXPORT_RULE))) {
+      throw new Error("Du hast gerade schon mehrmals exportiert. Versuch es in ein paar Minuten noch einmal.");
+    }
     const safe = async <T>(query: () => Promise<T[]>): Promise<T[]> => {
       try {
         return await query();
@@ -965,9 +983,15 @@ export const uploadIdDocument = createServerFn({ method: "POST" })
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
       return { error: "Das Bild ist beschädigt.", snapshot: await snapshot(sql, context.userId) };
     }
-    const bytes = Buffer.from(base64, "base64");
+    const raw = Buffer.from(base64, "base64");
     // JPEG magic bytes — the client re-encodes every upload through a canvas.
-    if (bytes.length > ID_MAX_BYTES || bytes.length < 1000 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
+    if (raw.length > ID_MAX_BYTES || raw.length < 1000 || raw[0] !== 0xff || raw[1] !== 0xd8 || raw[2] !== 0xff) {
+      return { error: "Das Bild ist zu groß oder kein JPEG.", snapshot: await snapshot(sql, context.userId) };
+    }
+    // Same as portraits: strip EXIF/GPS/COM even if a modified client skips
+    // the canvas re-encode (IDs are particularly sensitive).
+    const clean = stripJpegMetadata(new Uint8Array(raw));
+    if (!clean || clean.length > ID_MAX_BYTES || clean.length < 1000) {
       return { error: "Das Bild ist zu groß oder kein JPEG.", snapshot: await snapshot(sql, context.userId) };
     }
     const pending = await sql`
@@ -976,9 +1000,17 @@ export const uploadIdDocument = createServerFn({ method: "POST" })
     if (pending.length > 0) {
       return { error: "Dein Ausweis wird schon geprüft.", snapshot: await snapshot(sql, context.userId) };
     }
+    // Cap retries after a rejection so a script cannot fill the DB with ID photos.
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:id-upload:${context.userId}`, ID_UPLOAD_RULE))) {
+      return {
+        error: "Du hast gerade schon mehrmals einen Ausweis hochgeladen. Versuch es in ein paar Minuten noch einmal.",
+        snapshot: await snapshot(sql, context.userId),
+      };
+    }
     await sql`
       insert into vela_id_checks (id, user_id, image, status)
-      values (${crypto.randomUUID()}, ${context.userId}, ${bytes.toString("base64")}, 'pending')
+      values (${crypto.randomUUID()}, ${context.userId}, ${Buffer.from(clean).toString("base64")}, 'pending')
     `;
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });

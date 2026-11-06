@@ -90,10 +90,10 @@ function Datenschutz() {
       <Section title="7. Ausweisprüfung nach einer Sperre">
         <p>
           Wurdest du wegen des Alters gesperrt, kannst du ein Foto eines amtlichen Ausweises hochladen. Das Bild
-          wird im Browser neu kodiert (dabei werden Metadaten wie Standort entfernt), nur in unserer Datenbank
-          gespeichert und ist ausschließlich für den Betreiber sichtbar, nie für andere Nutzerinnen und Nutzer und
-          nie über einen öffentlichen Link. Wir prüfen nur dein Geburtsdatum; du darfst alle anderen Angaben außer
-          Foto und Name abdecken.
+          wird im Browser neu kodiert; der Server prüft, dass es ein echtes JPEG ist, und entfernt EXIF/GPS-Standort,
+          Kameradaten und Kommentare vor dem Speichern. Es liegt nur in unserer Datenbank und ist ausschließlich
+          für den Betreiber sichtbar, nie für andere Nutzerinnen und Nutzer und nie über einen öffentlichen Link.
+          Wir prüfen nur dein Geburtsdatum; du darfst alle anderen Angaben außer Foto und Name abdecken.
         </p>
         <p>
           Das Ausweisbild wird sofort gelöscht, sobald wir entschieden haben (Freigabe oder Ablehnung), spätestens
