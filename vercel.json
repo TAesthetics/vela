@@ -53,5 +53,11 @@
         }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/retention",
+      "schedule": "15 3 * * *"
+    }
   ]
 }

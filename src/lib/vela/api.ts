@@ -198,6 +198,8 @@ const ID_UPLOAD_RULE = { windowSec: 3600, max: 5 };
 const DATA_EXPORT_RULE = { windowSec: 3600, max: 10 };
 /** Stripe Checkout / Customer Portal session creation: 10 per hour. */
 const STRIPE_SESSION_RULE = { windowSec: 3600, max: 10 };
+/** Blocks per person: 60 per hour (real use is fine; stops scripts flooding vela_blocks). */
+const BLOCK_RULE = { windowSec: 3600, max: 60 };
 
 async function messageLimitHit(sql: Sql, userId: string) {
   const rows = await sql<{ minute: number | string; day: number | string }>`
@@ -457,7 +459,7 @@ export const loadVela = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
-    // Retention on every load: reports 12 months, ID images 30 days (no cron).
+    // Retention on every load (fallback; daily cron at /api/cron/retention also runs purgeExpired).
     await (await ageReview()).purgeExpired(sql);
     return snapshot(sql, context.userId);
   });
@@ -754,6 +756,12 @@ async function insertBlock(sql: Sql, from: string, to: string) {
   `;
 }
 
+/** True when the id exists as a Better Auth user row (not self — callers check that). */
+async function userExists(sql: Sql, userId: string): Promise<boolean> {
+  const rows = await sql`select 1 from "user" where id = ${userId} limit 1`;
+  return rows.length > 0;
+}
+
 export const blockUser = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { toUser?: string }) => input)
@@ -761,6 +769,17 @@ export const blockUser = createServerFn({ method: "POST" })
     const toUser = String(data?.toUser ?? "");
     const sql = await getSql();
     if (!toUser || toUser === context.userId) {
+      return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
+    }
+    // Soft cap against scripts flooding vela_blocks (shared rateLimit table).
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:block:${context.userId}`, BLOCK_RULE))) {
+      return {
+        error: "Zu viele Blockierungen gerade. Versuch es gleich noch einmal.",
+        snapshot: await snapshot(sql, context.userId),
+      };
+    }
+    if (!(await userExists(sql, toUser))) {
       return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
     }
     await insertBlock(sql, context.userId, toUser);
@@ -775,7 +794,7 @@ export const reportUser = createServerFn({ method: "POST" })
     const reason = String(data?.reason ?? "");
     const details = String(data?.details ?? "").trim().slice(0, 1000);
     const sql = await getSql();
-    if (!toUser || toUser === context.userId) {
+    if (!toUser || toUser === context.userId || !(await userExists(sql, toUser))) {
       return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
     }
     if (!REASON_IDS.has(reason)) {

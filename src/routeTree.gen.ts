@@ -20,6 +20,7 @@ import { Route as AdminAgeRouteImport } from './routes/admin/age'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AuthNativeRouteImport } from './routes/auth/native'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiCronRetentionRouteImport } from './routes/api/cron/retention'
 import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
 
 const IndexRoute = IndexRouteImport.update({
@@ -77,6 +78,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronRetentionRoute = ApiCronRetentionRouteImport.update({
+  id: '/api/cron/retention',
+  path: '/api/cron/retention',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
   id: '/api/stripe/webhook',
   path: '/api/stripe/webhook',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/retention': typeof ApiCronRetentionRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/retention': typeof ApiCronRetentionRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRoutesById {
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/native': typeof AuthNativeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/retention': typeof ApiCronRetentionRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRouteTypes {
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/api/client-error'
     | '/auth/native'
     | '/api/auth/$'
+    | '/api/cron/retention'
     | '/api/stripe/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
     | '/api/client-error'
     | '/auth/native'
     | '/api/auth/$'
+    | '/api/cron/retention'
     | '/api/stripe/webhook'
   id:
     | '__root__'
@@ -168,6 +179,7 @@ export interface FileRouteTypes {
     | '/api/client-error'
     | '/auth/native'
     | '/api/auth/$'
+    | '/api/cron/retention'
     | '/api/stripe/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -183,6 +195,7 @@ export interface RootRouteChildren {
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   AuthNativeRoute: typeof AuthNativeRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiCronRetentionRoute: typeof ApiCronRetentionRoute
   ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
 }
 
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/retention': {
+      id: '/api/cron/retention'
+      path: '/api/cron/retention'
+      fullPath: '/api/cron/retention'
+      preLoaderRoute: typeof ApiCronRetentionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/stripe/webhook': {
       id: '/api/stripe/webhook'
       path: '/api/stripe/webhook'
@@ -287,6 +307,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiClientErrorRoute: ApiClientErrorRoute,
   AuthNativeRoute: AuthNativeRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiCronRetentionRoute: ApiCronRetentionRoute,
   ApiStripeWebhookRoute: ApiStripeWebhookRoute,
 }
 export const routeTree = rootRouteImport

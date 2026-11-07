@@ -66,9 +66,9 @@ export async function purgeOldIdImages(sql: Sql) {
 }
 
 /**
- * Retention (see /datenschutz, "Speicherdauer"). Runs whenever the app or the
- * admin page loads — there is no cron. Cheap: every statement hits only rows
- * past their deadline.
+ * Retention (see /datenschutz, "Speicherdauer"). Runs daily via Vercel Cron
+ * at /api/cron/retention (03:15 UTC) and still on app/admin load as a fallback.
+ * Cheap: every statement hits only rows past their deadline.
  *  - ID images: 30 days.
  *  - Crash reports: 30 days after last seen.
  *  - Reports: 12 months.

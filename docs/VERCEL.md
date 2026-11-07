@@ -32,6 +32,7 @@ Kaltstart leer ist, also nur zum Testen.
 | `BETTER_AUTH_URL` | Produktions-Adresse ohne `/` am Ende, z. B. `https://vela-xxxx.vercel.app` |
 | `VELA_SELF_HOSTED` | `1` (Anmeldung mit E-Mail + Passwort statt des Grok-Anmeldedienstes) |
 | `ADMIN_EMAILS` | deine E-Mail(s), durch Komma getrennt |
+| `CRON_SECRET` | optional, empfohlen: zufällig (`openssl rand -hex 32`); schützt `/api/cron/retention` (siehe Abschnitt 7) |
 
 `VITE_AUTH_PROVIDERS`, `GOOGLE_*` und `X_*` werden nicht mehr gebraucht (schaden aber nicht).
 
@@ -74,6 +75,18 @@ Webhook (Stripe → Entwickler → Webhooks → Endpunkt hinzufügen):
 „Abo verwalten“ öffnet das Stripe-Kundenportal: einmal unter
 **Einstellungen → Billing → Kundenportal** aktivieren (Kündigen erlauben, „zum Ende des
 Abrechnungszeitraums“).
+
+## 7. Täglicher Retention-Cron (DSGVO)
+
+Jeden Tag um 03:15 UTC ruft Vercel `GET /api/cron/retention` auf und löscht abgelaufene
+Daten (Ausweis-Bilder nach 30 Tagen, Absturzberichte nach 30 Tagen, Meldungen und
+ähnliches nach 12 Monaten — gleiche Fristen wie in `/datenschutz`). Zusätzlich läuft
+die Bereinigung weiter beim App-/Admin-Laden als Fallback.
+
+Empfohlen: `CRON_SECRET` setzen (zufällig, z. B. `openssl rand -hex 32`) für Production
+und Preview, dann **Redeploy**. Vercel schickt den Wert automatisch als
+`Authorization: Bearer …`. Ohne Secret akzeptiert die Route nur Anfragen mit dem
+Header `x-vercel-cron: 1` (Hobby-Standard).
 
 ## Hinweise
 

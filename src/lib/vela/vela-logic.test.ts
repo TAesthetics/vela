@@ -111,3 +111,27 @@ describe("swipeCapHit", () => {
     assert.equal(swipeCapHit(0, SWIPE_CAPS.perDay), true);
   });
 });
+
+describe("block and retention hardening", () => {
+  it("rate-limits blockUser and checks the target exists before insert", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const block = apiSrc.slice(apiSrc.indexOf("export const blockUser"), apiSrc.indexOf("export const reportUser"));
+    assert.match(block, /consumeRateLimit\(sql, `vela:block:\$\{context\.userId\}`/);
+    assert.match(block, /BLOCK_RULE/);
+    assert.match(block, /userExists\(sql, toUser\)/);
+    assert.match(block, /Zu viele Blockierungen gerade/);
+    const report = apiSrc.slice(apiSrc.indexOf("export const reportUser"), apiSrc.indexOf("export const deleteProfile"));
+    assert.match(report, /userExists\(sql, toUser\)/);
+  });
+
+  it("exposes a daily retention cron route that calls purgeExpired", () => {
+    const cronSrc = readFileSync(new URL("../../routes/api/cron/retention.ts", import.meta.url), "utf8");
+    assert.match(cronSrc, /createFileRoute\("\/api\/cron\/retention"\)/);
+    assert.match(cronSrc, /purgeExpired/);
+    assert.match(cronSrc, /CRON_SECRET/);
+    assert.match(cronSrc, /x-vercel-cron/);
+    const vercel = readFileSync(new URL("../../../vercel.json", import.meta.url), "utf8");
+    assert.match(vercel, /"path": "\/api\/cron\/retention"/);
+    assert.match(vercel, /"schedule": "15 3 \* \* \*"/);
+  });
+});
