@@ -14,11 +14,11 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "frame-ancestors 'self' https://*.grok-sandbox.com"
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' capacitor: ionic: http://localhost https://localhost; connect-src 'self' capacitor: ionic: http://localhost https://localhost; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'self' https://*.grok-sandbox.com; upgrade-insecure-requests"
         },
         {
           "key": "Permissions-Policy",
-          "value": "geolocation=(), microphone=(), payment=(self), interest-cohort=()"
+          "value": "geolocation=(), microphone=(), camera=(), payment=(self), usb=(), midi=(), interest-cohort=(), browsing-topics=()"
         }
       ]
     },

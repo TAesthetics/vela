@@ -134,4 +134,34 @@ describe("block and retention hardening", () => {
     assert.match(vercel, /"path": "\/api\/cron\/retention"/);
     assert.match(vercel, /"schedule": "15 3 \* \* \*"/);
   });
+
+  it("ships a full Content-Security-Policy (not only frame-ancestors)", () => {
+    const vercel = JSON.parse(readFileSync(new URL("../../../vercel.json", import.meta.url), "utf8")) as {
+      headers: { source: string; headers: { key: string; value: string }[] }[];
+    };
+    const global = vercel.headers.find((block) => block.source === "/(.*)");
+    assert.ok(global, "global headers block missing");
+    const csp = global!.headers.find((h) => h.key === "Content-Security-Policy")?.value ?? "";
+    for (const part of [
+      "default-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-src 'none'",
+      "img-src 'self' data: blob:",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "script-src 'self' 'unsafe-inline'",
+      "connect-src 'self'",
+      "https://localhost",
+      "frame-ancestors 'self' https://*.grok-sandbox.com",
+      "upgrade-insecure-requests",
+    ]) {
+      assert.match(csp, new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
+    const perms = global!.headers.find((h) => h.key === "Permissions-Policy")?.value ?? "";
+    assert.match(perms, /camera=\(\)/);
+    assert.match(perms, /usb=\(\)/);
+    assert.match(perms, /browsing-topics=\(\)/);
+  });
 });
