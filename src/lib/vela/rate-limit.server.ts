@@ -27,40 +27,30 @@ export function rateLimitKey(scope: string, ip: string): string {
 export type RateRule = { windowSec: number; max: number };
 
 /**
- * DB-backed sliding window on the Better Auth `rateLimit` table
- * (migrations/0011). Same store as sign-in/sign-up, so counters survive
- * serverless cold starts. Returns true when the caller may proceed.
+ * DB-backed window on the Better Auth `rateLimit` table (migrations/0011).
+ * Same store as sign-in/sign-up, so counters survive serverless cold starts.
+ * Returns true when the caller may proceed.
+ *
+ * One atomic upsert (insert … on conflict … where … returning), so parallel
+ * requests cannot all read the same count and slip past the limit — the race
+ * behind GHSA-44jh-23m7-hpcf in Better Auth's own database limiter. When the
+ * limit is hit, the conditional update matches nothing and no row comes back.
  */
 export async function consumeRateLimit(sql: Sql, key: string, rule: RateRule): Promise<boolean> {
   const now = Date.now();
   const windowMs = rule.windowSec * 1000;
-  const existing = await sql<{ id: string; count: number | string; lastRequest: number | string }>`
-    select id, count, "lastRequest" from "rateLimit" where key = ${key} limit 1
+  const rows = await sql<{ count: number | string }>`
+    insert into "rateLimit" (id, key, count, "lastRequest")
+    values (${randomUUID()}, ${key}, 1, ${now})
+    on conflict (key) do update set
+      count = case
+        when ${now} - "rateLimit"."lastRequest" > ${windowMs} then 1
+        else "rateLimit".count + 1
+      end,
+      "lastRequest" = ${now}
+    where ${now} - "rateLimit"."lastRequest" > ${windowMs}
+       or "rateLimit".count < ${rule.max}
+    returning count
   `;
-  const row = existing[0];
-  if (!row) {
-    try {
-      await sql`
-        insert into "rateLimit" (id, key, count, "lastRequest")
-        values (${randomUUID()}, ${key}, 1, ${now})
-      `;
-      return true;
-    } catch {
-      // Concurrent first hit — fall through and treat as an existing row.
-      return consumeRateLimit(sql, key, rule);
-    }
-  }
-  const last = Number(row.lastRequest);
-  const count = Number(row.count);
-  if (!Number.isFinite(last) || now - last > windowMs) {
-    await sql`
-      update "rateLimit" set count = 1, "lastRequest" = ${now} where key = ${key}
-    `;
-    return true;
-  }
-  if (count >= rule.max) return false;
-  await sql`
-    update "rateLimit" set count = count + 1, "lastRequest" = ${now} where key = ${key}
-  `;
-  return true;
+  return rows.length > 0;
 }

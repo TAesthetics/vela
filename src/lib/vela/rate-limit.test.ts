@@ -27,34 +27,25 @@ describe("rateLimitKey", () => {
 });
 
 describe("consumeRateLimit", () => {
+  // Simulates the single atomic upsert: values are
+  // (id, key, now, now, windowMs, now, now, windowMs, max).
   function fakeSql(store: Map<string, { id: string; count: number; lastRequest: number }>): Sql {
     const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const text = strings.join("?");
-      if (text.includes('from "rateLimit"') && text.includes("where key")) {
-        const key = String(values[0]);
-        const row = store.get(key);
-        return row ? [{ id: row.id, count: row.count, lastRequest: row.lastRequest }] : [];
+      if (!text.includes('insert into "rateLimit"') || !text.includes("on conflict (key) do update")) {
+        throw new Error(`unexpected SQL: ${text}`);
       }
-      // insert embeds literal count=1: values are (id, key, lastRequest)
-      if (text.includes('insert into "rateLimit"')) {
-        const [id, key, lastRequest] = values as [string, string, number];
-        if (store.has(key)) throw new Error("unique");
-        store.set(key, { id, count: 1, lastRequest });
-        return [];
+      const [id, key, now, , windowMs, , , , max] = values as [string, string, number, number, number, number, number, number, number];
+      const row = store.get(key);
+      if (!row) {
+        store.set(key, { id, count: 1, lastRequest: now });
+        return [{ count: 1 }];
       }
-      if (text.includes('update "rateLimit" set count = 1')) {
-        const [now, key] = values as [number, string];
-        const row = store.get(key);
-        if (row) store.set(key, { ...row, count: 1, lastRequest: now });
-        return [];
-      }
-      if (text.includes('update "rateLimit" set count = count + 1')) {
-        const [now, key] = values as [number, string];
-        const row = store.get(key);
-        if (row) store.set(key, { ...row, count: row.count + 1, lastRequest: now });
-        return [];
-      }
-      throw new Error(`unexpected SQL: ${text}`);
+      const expired = now - row.lastRequest > windowMs;
+      if (!expired && row.count >= max) return [];
+      const count = expired ? 1 : row.count + 1;
+      store.set(key, { ...row, count, lastRequest: now });
+      return [{ count }];
     }) as Sql;
     sql.query = async () => [];
     return sql;
@@ -69,5 +60,25 @@ describe("consumeRateLimit", () => {
     assert.equal(await consumeRateLimit(sql, "k", rule), true);
     assert.equal(await consumeRateLimit(sql, "k", rule), false);
     assert.equal(store.get("k")?.count, 3);
+  });
+
+  it("resets after the window has passed", async () => {
+    const store = new Map([["k", { id: "x", count: 3, lastRequest: Date.now() - 61_000 }]]);
+    const sql = fakeSql(store);
+    assert.equal(await consumeRateLimit(sql, "k", { windowSec: 60, max: 3 }), true);
+    assert.equal(store.get("k")?.count, 1);
+  });
+
+  it("uses one atomic statement per hit", async () => {
+    let calls = 0;
+    const store = new Map();
+    const inner = fakeSql(store);
+    const sql = (async (s: TemplateStringsArray, ...v: unknown[]) => {
+      calls++;
+      return inner(s, ...v);
+    }) as Sql;
+    await Promise.all([1, 2, 3, 4, 5].map(() => consumeRateLimit(sql, "k", { windowSec: 60, max: 2 })));
+    assert.equal(calls, 5);
+    assert.equal(store.get("k")?.count, 2);
   });
 });

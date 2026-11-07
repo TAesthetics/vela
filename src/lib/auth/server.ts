@@ -181,6 +181,9 @@ const grokOAuthPlugin =
         })),
       });
 
+/** Same switch as Better Auth's database rate limiter below (real Postgres only). */
+export const authRateLimitEnabled = !authDisabled && Boolean(databaseUrl);
+
 export const auth = betterAuth({
   baseURL,
   // Deployed apps inject BETTER_AUTH_SECRET. Preview: process-stable secret on
@@ -229,7 +232,7 @@ export const auth = betterAuth({
   rateLimit: {
     // On whenever a real Postgres is configured (deployed); off for the
     // embedded PGLite preview.
-    enabled: !authDisabled && Boolean(databaseUrl),
+    enabled: authRateLimitEnabled,
     storage: "database",
     window: 60,
     max: 100,
