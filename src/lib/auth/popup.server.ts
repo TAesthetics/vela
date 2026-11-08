@@ -119,9 +119,9 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
   const code = handoffCode(url.searchParams.get("code"));
   const back = `${url.origin}/auth/popup?done=1${code ? `&code=${code}` : ""}`;
   try {
-    const apiRes = await auth.api.signInWithOAuth2({
+    const apiRes = await auth.api.signInSocial({
       body: {
-        providerId,
+        provider: providerId,
         callbackURL: back,
         errorCallbackURL: `${back}&error=1`,
       },

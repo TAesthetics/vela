@@ -121,8 +121,8 @@ export async function handleNativeAuthGet(request: Request): Promise<Response> {
   }
   const back = `${appOrigin(request)}/auth/native?done=1&challenge=${challenge}`;
   try {
-    const res = await auth.api.signInWithOAuth2({
-      body: { providerId, callbackURL: back, errorCallbackURL: `${back}&error=1` },
+    const res = await auth.api.signInSocial({
+      body: { provider: providerId, callbackURL: back, errorCallbackURL: `${back}&error=1` },
       headers: request.headers,
       asResponse: true,
     });

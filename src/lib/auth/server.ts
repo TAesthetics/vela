@@ -172,6 +172,9 @@ const grokOAuthPlugin =
           tokenUrl: grokTokenUrl,
           userInfoUrl: grokUserInfoUrl,
           scopes: ["openid", "profile", "email"],
+          // Keep sign-out local to VELA (1.7 would otherwise send the browser
+          // to the broker's end-session page when discovery publishes one).
+          disableProviderLogout: true,
           // `prompt: "login"` forces the broker to re-authenticate against the
           // upstream on every sign-in instead of silently reusing an existing
           // broker session. Combined with the broker sending Google
