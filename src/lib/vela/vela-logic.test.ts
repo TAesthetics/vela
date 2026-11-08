@@ -110,6 +110,16 @@ describe("swipeCapHit", () => {
     assert.equal(swipeCapHit(SWIPE_CAPS.perMinute, 10), true);
     assert.equal(swipeCapHit(0, SWIPE_CAPS.perDay), true);
   });
+
+  it("adds atomic burst guards on swipe alongside the row-count caps", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const swipe = apiSrc.slice(apiSrc.indexOf("export const swipe"), apiSrc.indexOf("export const undoPass"));
+    assert.match(swipe, /consumeRateLimit\(sql, `vela:swipe:\$\{context\.userId\}`/);
+    assert.match(swipe, /SWIPE_MINUTE_RULE/);
+    assert.match(swipe, /consumeRateLimit\(sql, `vela:swipe-day:\$\{context\.userId\}`/);
+    assert.match(swipe, /SWIPE_DAY_RULE/);
+    assert.match(swipe, /swipeCapHit/);
+  });
 });
 
 describe("block and retention hardening", () => {

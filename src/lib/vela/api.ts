@@ -5,6 +5,7 @@ import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import {
   FREE_SWIPES,
+  SWIPE_CAPS,
   swipeCapHit,
   emptySnapshot,
   ORBITS,
@@ -202,11 +203,15 @@ const STRIPE_SESSION_RULE = { windowSec: 3600, max: 10 };
 const BLOCK_RULE = { windowSec: 3600, max: 60 };
 /**
  * Atomic burst guards on the rateLimit table. The count queries on
- * vela_messages / vela_reports read-then-insert, so parallel requests could
- * all pass them; these single-statement counters cannot be overtaken.
+ * vela_messages / vela_reports / vela_swipes read-then-insert, so parallel
+ * requests could all pass them; these single-statement counters cannot be
+ * overtaken. Swipe hard caps match SWIPE_CAPS; the free daily allowance
+ * stays a row count so an undo still gives that swipe back.
  */
 const MESSAGE_BURST_RULE = { windowSec: 60, max: MESSAGE_LIMITS.perMinute };
 const REPORT_BURST_RULE = { windowSec: 86400, max: REPORTS_PER_DAY };
+const SWIPE_MINUTE_RULE = { windowSec: 60, max: SWIPE_CAPS.perMinute };
+const SWIPE_DAY_RULE = { windowSec: 86400, max: SWIPE_CAPS.perDay };
 
 async function messageLimitHit(sql: Sql, userId: string) {
   const rows = await sql<{ minute: number | string; day: number | string }>`
@@ -597,6 +602,15 @@ export const swipe = createServerFn({ method: "POST" })
       if (!prompts.some((prompt) => prompt.id === promptId)) {
         return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
       }
+    }
+    // Counted in the shared rateLimit table so parallel swipes cannot overtake
+    // the per-minute / per-day ceilings the way a read-then-insert can.
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (
+      !(await consumeRateLimit(sql, `vela:swipe:${context.userId}`, SWIPE_MINUTE_RULE)) ||
+      !(await consumeRateLimit(sql, `vela:swipe-day:${context.userId}`, SWIPE_DAY_RULE))
+    ) {
+      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
     }
     await sql`
       insert into vela_swipes (from_user, to_user, direction, prompt_id, note, day)
