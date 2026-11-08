@@ -200,6 +200,13 @@ const DATA_EXPORT_RULE = { windowSec: 3600, max: 10 };
 const STRIPE_SESSION_RULE = { windowSec: 3600, max: 10 };
 /** Blocks per person: 60 per hour (real use is fine; stops scripts flooding vela_blocks). */
 const BLOCK_RULE = { windowSec: 3600, max: 60 };
+/**
+ * Atomic burst guards on the rateLimit table. The count queries on
+ * vela_messages / vela_reports read-then-insert, so parallel requests could
+ * all pass them; these single-statement counters cannot be overtaken.
+ */
+const MESSAGE_BURST_RULE = { windowSec: 60, max: MESSAGE_LIMITS.perMinute };
+const REPORT_BURST_RULE = { windowSec: 86400, max: REPORTS_PER_DAY };
 
 async function messageLimitHit(sql: Sql, userId: string) {
   const rows = await sql<{ minute: number | string; day: number | string }>`
@@ -677,7 +684,11 @@ export const sendMessage = createServerFn({ method: "POST" })
     if (!(await canInteract(sql, context.userId, toUser))) {
       return { error: "Dieses Gespräch ist beendet.", snapshot: await snapshot(sql, context.userId) };
     }
-    if (await messageLimitHit(sql, context.userId)) {
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (
+      (await messageLimitHit(sql, context.userId)) ||
+      !(await consumeRateLimit(sql, `vela:message:${context.userId}`, MESSAGE_BURST_RULE))
+    ) {
       return { error: "Kurz durchatmen. Gleich geht es weiter.", snapshot: await snapshot(sql, context.userId) };
     }
     const [pairA, pairB] = pairOf(context.userId, toUser);
@@ -813,7 +824,11 @@ export const reportUser = createServerFn({ method: "POST" })
       select count(*) as n from vela_reports
       where from_user = ${context.userId} and created_at > now() - interval '1 day'
     `;
-    if (Number(recent[0]?.n ?? 0) >= REPORTS_PER_DAY) {
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (
+      Number(recent[0]?.n ?? 0) >= REPORTS_PER_DAY ||
+      !(await consumeRateLimit(sql, `vela:report:${context.userId}`, REPORT_BURST_RULE))
+    ) {
       // Still block, so the person is out of sight; just no new report row.
       await insertBlock(sql, context.userId, toUser);
       return {
