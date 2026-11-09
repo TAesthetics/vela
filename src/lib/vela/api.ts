@@ -612,7 +612,10 @@ export const swipe = createServerFn({ method: "POST" })
     ) {
       return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
     }
-    await sql`
+    // A double tap can race past the "existing" check above; the primary key
+    // (from_user, to_user) then decides, and the loser is a quiet skip instead
+    // of a server error (and never sends the note twice).
+    const inserted = await sql`
       insert into vela_swipes (from_user, to_user, direction, prompt_id, note, day)
       values (
         ${context.userId},
@@ -622,7 +625,12 @@ export const swipe = createServerFn({ method: "POST" })
         ${direction === "spark" ? note : ""},
         ${day}
       )
+      on conflict (from_user, to_user) do nothing
+      returning 1
     `;
+    if (inserted.length === 0) {
+      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+    }
     if (direction === "spark" && note && !(await messageLimitHit(sql, context.userId))) {
       const [pairA, pairB] = pairOf(context.userId, toUser);
       await sql`
