@@ -50,6 +50,7 @@ const globalRef = globalThis as typeof globalThis & {
   __pgSqlPromise__?: Promise<Sql>;
   __pgliteInstance__?: Promise<import("@electric-sql/pglite").PGlite>;
   __pgliteMigrateChain__?: Promise<void>;
+  __pgPool__?: import("pg").Pool;
 };
 
 /**
@@ -96,6 +97,7 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
+    globalRef.__pgPool__ = pool;
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
@@ -170,6 +172,39 @@ async function createPgliteSql(): Promise<Sql> {
 }
 
 let sqlPromise: Promise<Sql> | null = null;
+
+/**
+ * Run several statements as one all-or-nothing unit: `fn` gets a `tx` client
+ * pinned to a single connection inside BEGIN/COMMIT; any thrown error rolls
+ * everything back. Use only `tx` inside `fn` (PGLite has one connection, so
+ * the outer client would wait on the open transaction).
+ */
+export async function withTransaction<T>(fn: (tx: Sql) => Promise<T>): Promise<T> {
+  await getSql();
+  if (dbSource === "pglite") {
+    const pg = await globalRef.__pgliteInstance__;
+    if (!pg) throw new Error("PGLite instance failed to initialize");
+    return pg.transaction((tx) =>
+      fn(toSql(async <R>(text: string, params: unknown[]) => (await tx.query<R>(text, params)).rows)),
+    );
+  }
+  const pool = globalRef.__pgPool__;
+  if (!pool) throw new Error("Postgres pool failed to initialize");
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const result = await fn(
+      toSql(async <R>(text: string, params: unknown[]) => (await client.query(text, params)).rows as R[]),
+    );
+    await client.query("commit");
+    return result;
+  } catch (err) {
+    await client.query("rollback").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
 
 async function createSql(): Promise<Sql> {
   if (typeof window !== "undefined") {

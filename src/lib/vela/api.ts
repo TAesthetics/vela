@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { FILTER_MESSAGE, isObjectionable } from "./content-filter";
 import { cleanJpegDataUrl, stripJpegMetadata } from "./jpeg";
-import { getSql, type Sql } from "@/lib/db";
+import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import {
   FREE_SWIPES,
@@ -884,25 +884,8 @@ export const deleteProfile = createServerFn({ method: "POST" })
         }
       }
     }
-    await sql`delete from vela_subscriptions where user_id = ${id}`;
-    // An open age suspension must not be dodged by deleting and signing in
-    // again: keep only a keyed hash of the login identity (max. 12 months).
-    // Same for a rule ban.
-    if ((await statusOf(sql, id)) === "banned") await (await ageReview()).rememberSuspendedIdentity(sql, id, "ban");
-    else if (await openAgeSuspension(sql, id)) await (await ageReview()).rememberSuspendedIdentity(sql, id);
-    await sql`delete from vela_messages where pair_a = ${id} or pair_b = ${id}`;
-    await sql`delete from vela_swipes where from_user = ${id} or to_user = ${id}`;
-    await sql`delete from vela_blocks where from_user = ${id} or to_user = ${id}`;
-    await sql`
-      update vela_id_checks
-      set image = null, status = case when status = 'pending' then 'expired' else status end
-      where user_id = ${id} and image is not null
-    `;
-    await sql`delete from vela_profiles where user_id = ${id}`;
-    // DSGVO Art. 17: also delete the login itself. End the session first so its
-    // cookies are cleared in this response, then the user row (sessions and
-    // linked accounts go with it via ON DELETE CASCADE). Reports stay for up to
-    // 12 months (see Datenschutz), keyed only by the now orphaned id.
+    // End the session first so its cookies are cleared in this response. If the
+    // deletion below fails, the person is only signed out and can try again.
     try {
       const { auth } = await import("@/lib/auth/server");
       const { getRequest } = await import("@tanstack/react-start/server");
@@ -913,9 +896,32 @@ export const deleteProfile = createServerFn({ method: "POST" })
     } catch {
       /* no session to end (e.g. auth off) — the row deletes below still apply */
     }
-    await sql`delete from "session" where "userId" = ${id}`;
-    await sql`delete from "account" where "userId" = ${id}`;
-    await sql`delete from "user" where id = ${id}`;
+    const review = await ageReview();
+    // All or nothing: a failure halfway must not leave an account without
+    // messages but with a profile, or a deleted login with leftover data.
+    await withTransaction(async (tx) => {
+      await tx`delete from vela_subscriptions where user_id = ${id}`;
+      // An open age suspension must not be dodged by deleting and signing in
+      // again: keep only a keyed hash of the login identity (max. 12 months).
+      // Same for a rule ban.
+      if ((await statusOf(tx, id)) === "banned") await review.rememberSuspendedIdentity(tx, id, "ban");
+      else if (await openAgeSuspension(tx, id)) await review.rememberSuspendedIdentity(tx, id);
+      await tx`delete from vela_messages where pair_a = ${id} or pair_b = ${id}`;
+      await tx`delete from vela_swipes where from_user = ${id} or to_user = ${id}`;
+      await tx`delete from vela_blocks where from_user = ${id} or to_user = ${id}`;
+      await tx`
+        update vela_id_checks
+        set image = null, status = case when status = 'pending' then 'expired' else status end
+        where user_id = ${id} and image is not null
+      `;
+      await tx`delete from vela_profiles where user_id = ${id}`;
+      // DSGVO Art. 17: also delete the login itself (sessions and linked
+      // accounts too). Reports stay for up to 12 months (see Datenschutz),
+      // keyed only by the now orphaned id.
+      await tx`delete from "session" where "userId" = ${id}`;
+      await tx`delete from "account" where "userId" = ${id}`;
+      await tx`delete from "user" where id = ${id}`;
+    });
     return emptySnapshot();
   });
 
