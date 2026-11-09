@@ -835,22 +835,37 @@ export const reportUser = createServerFn({ method: "POST" })
     }
     // One report per person is enough (it already blocks), and a daily cap
     // keeps mass false reports from flooding the operator's review queue.
-    const already = await sql`
-      select 1 from vela_reports where from_user = ${context.userId} and to_user = ${toUser} limit 1
-    `;
-    if (already.length > 0) {
+    // Check and insert run in one transaction under a per-reporter advisory
+    // lock, so a double tap or parallel requests can't slip past either check
+    // (two rows for the same person, or more than the daily cap).
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    const outcome = await withTransaction(async (tx): Promise<"duplicate" | "capped" | "inserted"> => {
+      await tx`select pg_advisory_xact_lock(hashtext(${`vela:report:${context.userId}`}))`;
+      const already = await tx`
+        select 1 from vela_reports where from_user = ${context.userId} and to_user = ${toUser} limit 1
+      `;
+      if (already.length > 0) return "duplicate";
+      const recent = await tx<{ n: number | string }>`
+        select count(*) as n from vela_reports
+        where from_user = ${context.userId} and created_at > now() - interval '1 day'
+      `;
+      if (
+        Number(recent[0]?.n ?? 0) >= REPORTS_PER_DAY ||
+        !(await consumeRateLimit(tx, `vela:report:${context.userId}`, REPORT_BURST_RULE))
+      ) {
+        return "capped";
+      }
+      await tx`
+        insert into vela_reports (id, from_user, to_user, reason, details)
+        values (${crypto.randomUUID()}, ${context.userId}, ${toUser}, ${reason}, ${details})
+      `;
+      return "inserted";
+    });
+    if (outcome === "duplicate") {
       await insertBlock(sql, context.userId, toUser);
       return { error: null, snapshot: await snapshot(sql, context.userId) };
     }
-    const recent = await sql<{ n: number | string }>`
-      select count(*) as n from vela_reports
-      where from_user = ${context.userId} and created_at > now() - interval '1 day'
-    `;
-    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
-    if (
-      Number(recent[0]?.n ?? 0) >= REPORTS_PER_DAY ||
-      !(await consumeRateLimit(sql, `vela:report:${context.userId}`, REPORT_BURST_RULE))
-    ) {
+    if (outcome === "capped") {
       // Still block, so the person is out of sight; just no new report row.
       await insertBlock(sql, context.userId, toUser);
       return {
@@ -858,10 +873,6 @@ export const reportUser = createServerFn({ method: "POST" })
         snapshot: await snapshot(sql, context.userId),
       };
     }
-    await sql`
-      insert into vela_reports (id, from_user, to_user, reason, details)
-      values (${crypto.randomUUID()}, ${context.userId}, ${toUser}, ${reason}, ${details})
-    `;
     // Reporting always blocks, so the reporter never sees this person again.
     await insertBlock(sql, context.userId, toUser);
     if (reason === "minor" && !(await ageVerified(sql, toUser))) {
