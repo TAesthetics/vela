@@ -587,50 +587,56 @@ export const swipe = createServerFn({ method: "POST" })
     if (swipeCapHit(Number(caps[0]?.minute ?? 0), Number(caps[0]?.today ?? 0))) {
       return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
     }
-    const me = await sql<{ plus: boolean | string }>`
-      select plus from vela_profiles where user_id = ${context.userId}
-    `;
-    const plus = me[0] ? asBool(me[0].plus) : false;
-    if (!plus) {
-      const usedRows = await sql<{ n: number }>`
-        select count(*) as n from vela_swipes where from_user = ${context.userId} and day = ${day}
-      `;
-      if (Number(usedRows[0]?.n ?? 0) >= FREE_SWIPES) {
-        return { status: "limit" as const, snapshot: await snapshot(sql, context.userId) };
-      }
-    }
     if (direction === "spark") {
       const prompts = asPrompts(target[0].prompts);
       if (!prompts.some((prompt) => prompt.id === promptId)) {
         return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
       }
     }
-    // Counted in the shared rateLimit table so parallel swipes cannot overtake
-    // the per-minute / per-day ceilings the way a read-then-insert can.
+    // The free daily allowance, the burst counters and the insert run in one
+    // transaction under a per-swiper advisory lock, so parallel swipes can't
+    // slip past the free limit (count-then-insert race) or the ceilings. The
+    // allowance stays a row count so undo still gives a swipe back. A double
+    // tap on the same person is settled by the primary key (from_user, to_user):
+    // the loser is a quiet skip, never a server error or a second note.
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
-    if (
-      !(await consumeRateLimit(sql, `vela:swipe:${context.userId}`, SWIPE_MINUTE_RULE)) ||
-      !(await consumeRateLimit(sql, `vela:swipe-day:${context.userId}`, SWIPE_DAY_RULE))
-    ) {
-      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+    const outcome = await withTransaction(async (tx): Promise<"limit" | "skip" | "inserted"> => {
+      await tx`select pg_advisory_xact_lock(hashtext(${`vela:swipe:${context.userId}`}))`;
+      const me = await tx<{ plus: boolean | string }>`
+        select plus from vela_profiles where user_id = ${context.userId}
+      `;
+      const plus = me[0] ? asBool(me[0].plus) : false;
+      if (!plus) {
+        const usedRows = await tx<{ n: number | string }>`
+          select count(*) as n from vela_swipes where from_user = ${context.userId} and day = ${day}
+        `;
+        if (Number(usedRows[0]?.n ?? 0) >= FREE_SWIPES) return "limit";
+      }
+      if (
+        !(await consumeRateLimit(tx, `vela:swipe:${context.userId}`, SWIPE_MINUTE_RULE)) ||
+        !(await consumeRateLimit(tx, `vela:swipe-day:${context.userId}`, SWIPE_DAY_RULE))
+      ) {
+        return "skip";
+      }
+      const inserted = await tx`
+        insert into vela_swipes (from_user, to_user, direction, prompt_id, note, day)
+        values (
+          ${context.userId},
+          ${toUser},
+          ${direction},
+          ${direction === "spark" ? promptId : null},
+          ${direction === "spark" ? note : ""},
+          ${day}
+        )
+        on conflict (from_user, to_user) do nothing
+        returning 1
+      `;
+      return inserted.length === 0 ? "skip" : "inserted";
+    });
+    if (outcome === "limit") {
+      return { status: "limit" as const, snapshot: await snapshot(sql, context.userId) };
     }
-    // A double tap can race past the "existing" check above; the primary key
-    // (from_user, to_user) then decides, and the loser is a quiet skip instead
-    // of a server error (and never sends the note twice).
-    const inserted = await sql`
-      insert into vela_swipes (from_user, to_user, direction, prompt_id, note, day)
-      values (
-        ${context.userId},
-        ${toUser},
-        ${direction},
-        ${direction === "spark" ? promptId : null},
-        ${direction === "spark" ? note : ""},
-        ${day}
-      )
-      on conflict (from_user, to_user) do nothing
-      returning 1
-    `;
-    if (inserted.length === 0) {
+    if (outcome === "skip") {
       return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
     }
     if (direction === "spark" && note && !(await messageLimitHit(sql, context.userId))) {

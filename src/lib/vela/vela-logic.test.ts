@@ -114,11 +114,24 @@ describe("swipeCapHit", () => {
   it("adds atomic burst guards on swipe alongside the row-count caps", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const swipe = apiSrc.slice(apiSrc.indexOf("export const swipe"), apiSrc.indexOf("export const undoPass"));
-    assert.match(swipe, /consumeRateLimit\(sql, `vela:swipe:\$\{context\.userId\}`/);
+    assert.match(swipe, /consumeRateLimit\(tx, `vela:swipe:\$\{context\.userId\}`/);
     assert.match(swipe, /SWIPE_MINUTE_RULE/);
-    assert.match(swipe, /consumeRateLimit\(sql, `vela:swipe-day:\$\{context\.userId\}`/);
+    assert.match(swipe, /consumeRateLimit\(tx, `vela:swipe-day:\$\{context\.userId\}`/);
     assert.match(swipe, /SWIPE_DAY_RULE/);
     assert.match(swipe, /swipeCapHit/);
+  });
+
+  it("checks the free daily allowance and inserts under one per-swiper lock", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const swipe = apiSrc.slice(apiSrc.indexOf("export const swipe"), apiSrc.indexOf("export const undoPass"));
+    const tx = swipe.slice(swipe.indexOf("withTransaction("));
+    assert.ok(swipe.includes("withTransaction("));
+    assert.match(tx, /pg_advisory_xact_lock\(hashtext\(\$\{`vela:swipe:\$\{context\.userId\}`\}\)\)/);
+    const lock = tx.indexOf("pg_advisory_xact_lock");
+    const free = tx.indexOf("FREE_SWIPES");
+    const insert = tx.indexOf("insert into vela_swipes");
+    assert.ok(lock < free && free < insert);
+    assert.match(tx, /on conflict \(from_user, to_user\) do nothing/);
   });
 });
 
