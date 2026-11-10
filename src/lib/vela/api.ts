@@ -639,12 +639,19 @@ export const swipe = createServerFn({ method: "POST" })
     if (outcome === "skip") {
       return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
     }
-    if (direction === "spark" && note && !(await messageLimitHit(sql, context.userId))) {
+    if (direction === "spark" && note) {
+      // The spark note counts toward the message cap, so it takes the same
+      // per-sender lock as sendMessage: a note and a parallel message can't
+      // both slip past the daily limit.
       const [pairA, pairB] = pairOf(context.userId, toUser);
-      await sql`
-        insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
-        values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${note}, 'note')
-      `;
+      await withTransaction(async (tx) => {
+        await tx`select pg_advisory_xact_lock(hashtext(${`vela:message:${context.userId}`}))`;
+        if (await messageLimitHit(tx, context.userId)) return;
+        await tx`
+          insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
+          values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${note}, 'note')
+        `;
+      });
     }
     let status: "match" | "sent" | "ok" = direction === "pass" ? "ok" : "sent";
     if (direction === "spark") {

@@ -133,6 +133,16 @@ describe("swipeCapHit", () => {
     assert.ok(lock < free && free < insert);
     assert.match(tx, /on conflict \(from_user, to_user\) do nothing/);
   });
+
+  it("inserts the spark note under the per-sender message lock after the limit check", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const swipe = apiSrc.slice(apiSrc.indexOf("export const swipe"), apiSrc.indexOf("export const undoPass"));
+    const noteBlock = swipe.slice(swipe.indexOf('direction === "spark" && note)'));
+    const lock = noteBlock.indexOf("vela:message:${context.userId}");
+    const limit = noteBlock.indexOf("messageLimitHit(tx");
+    const insert = noteBlock.indexOf("'note')");
+    assert.ok(lock > 0 && lock < limit && limit < insert);
+  });
 });
 
 describe("block and retention hardening", () => {
