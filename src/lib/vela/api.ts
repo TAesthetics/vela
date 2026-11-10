@@ -212,6 +212,8 @@ const MESSAGE_BURST_RULE = { windowSec: 60, max: MESSAGE_LIMITS.perMinute };
 const REPORT_BURST_RULE = { windowSec: 86400, max: REPORTS_PER_DAY };
 const SWIPE_MINUTE_RULE = { windowSec: 60, max: SWIPE_CAPS.perMinute };
 const SWIPE_DAY_RULE = { windowSec: 86400, max: SWIPE_CAPS.perDay };
+// A resent identical message within this window is treated as already sent.
+const DUPLICATE_MESSAGE_SECONDS = 10;
 
 async function messageLimitHit(sql: Sql, userId: string) {
   const rows = await sql<{ minute: number | string; day: number | string }>`
@@ -706,18 +708,37 @@ export const sendMessage = createServerFn({ method: "POST" })
     if (!(await canInteract(sql, context.userId, toUser))) {
       return { error: "Dieses Gespräch ist beendet.", snapshot: await snapshot(sql, context.userId) };
     }
+    // Limit checks, a duplicate check and the insert run in one transaction
+    // under a per-sender advisory lock, so parallel requests can't overrun the
+    // daily cap, and a resent request (double tap, network retry) with the
+    // same text within a few seconds doesn't post the message twice.
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
-    if (
-      (await messageLimitHit(sql, context.userId)) ||
-      !(await consumeRateLimit(sql, `vela:message:${context.userId}`, MESSAGE_BURST_RULE))
-    ) {
+    const [pairA, pairB] = pairOf(context.userId, toUser);
+    const outcome = await withTransaction(async (tx): Promise<"duplicate" | "limited" | "inserted"> => {
+      await tx`select pg_advisory_xact_lock(hashtext(${`vela:message:${context.userId}`}))`;
+      const same = await tx`
+        select 1 from vela_messages
+        where pair_a = ${pairA} and pair_b = ${pairB} and from_user = ${context.userId}
+          and kind = 'message' and body = ${text}
+          and created_at > now() - ${DUPLICATE_MESSAGE_SECONDS}::int * interval '1 second'
+        limit 1
+      `;
+      if (same.length > 0) return "duplicate";
+      if (
+        (await messageLimitHit(tx, context.userId)) ||
+        !(await consumeRateLimit(tx, `vela:message:${context.userId}`, MESSAGE_BURST_RULE))
+      ) {
+        return "limited";
+      }
+      await tx`
+        insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
+        values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${text}, 'message')
+      `;
+      return "inserted";
+    });
+    if (outcome === "limited") {
       return { error: "Kurz durchatmen. Gleich geht es weiter.", snapshot: await snapshot(sql, context.userId) };
     }
-    const [pairA, pairB] = pairOf(context.userId, toUser);
-    await sql`
-      insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)
-      values (${crypto.randomUUID()}, ${pairA}, ${pairB}, ${context.userId}, ${text}, 'message')
-    `;
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
