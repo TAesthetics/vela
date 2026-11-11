@@ -65,6 +65,23 @@ export async function purgeOldIdImages(sql: Sql) {
   `;
 }
 
+/** At most one fallback purge per window, shared across all instances. */
+export const RETENTION_FALLBACK_RULE = { windowSec: 10 * 60, max: 1 } as const;
+
+/**
+ * Fallback retention for hot paths (app load, unauthenticated cron header):
+ * runs purgeExpired at most once per 10 minutes, coordinated through the
+ * shared rateLimit table, so frequent app loads or spoofed cron calls don't
+ * each fire the full set of delete statements. The daily cron with
+ * CRON_SECRET and the admin page still call purgeExpired directly.
+ */
+export async function purgeExpiredThrottled(sql: Sql): Promise<boolean> {
+  const { consumeRateLimit } = await import("./rate-limit.server.ts");
+  if (!(await consumeRateLimit(sql, "vela:retention-purge", RETENTION_FALLBACK_RULE))) return false;
+  await purgeExpired(sql);
+  return true;
+}
+
 /**
  * Retention (see /datenschutz, "Speicherdauer"). Runs daily via Vercel Cron
  * at /api/cron/retention (03:15 UTC) and still on app/admin load as a fallback.

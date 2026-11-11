@@ -157,6 +157,20 @@ describe("block and retention hardening", () => {
     assert.match(report, /userExists\(sql, toUser\)/);
   });
 
+  it("throttles the retention fallback on app load and header-only cron", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const ageSrc = readFileSync(new URL("./age-review.server.ts", import.meta.url), "utf8");
+    assert.match(ageSrc, /export async function purgeExpiredThrottled/);
+    assert.match(ageSrc, /"vela:retention-purge"/);
+    assert.match(ageSrc, /windowSec: 10 \* 60, max: 1/);
+    const load = apiSrc.slice(apiSrc.indexOf("export const loadVela"), apiSrc.indexOf("export const syncVela"));
+    assert.match(load, /purgeExpiredThrottled\(sql\)/);
+    assert.doesNotMatch(load, /\.purgeExpired\(sql\)/);
+    const cronSrc = readFileSync(new URL("../../routes/api/cron/retention.ts", import.meta.url), "utf8");
+    assert.match(cronSrc, /auth === "secret"\) await purgeExpired\(sql\)/);
+    assert.match(cronSrc, /purgeExpiredThrottled\(sql\)/);
+  });
+
   it("exposes a daily retention cron route that calls purgeExpired", () => {
     const cronSrc = readFileSync(new URL("../../routes/api/cron/retention.ts", import.meta.url), "utf8");
     assert.match(cronSrc, /createFileRoute\("\/api\/cron\/retention"\)/);

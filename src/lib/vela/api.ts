@@ -473,8 +473,9 @@ export const loadVela = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
-    // Retention on every load (fallback; daily cron at /api/cron/retention also runs purgeExpired).
-    await (await ageReview()).purgeExpired(sql);
+    // Retention fallback on load, at most once per 10 minutes across all
+    // instances (daily cron at /api/cron/retention runs the full purge).
+    await (await ageReview()).purgeExpiredThrottled(sql);
     return snapshot(sql, context.userId);
   });
 
