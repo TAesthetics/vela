@@ -143,6 +143,18 @@ describe("swipeCapHit", () => {
     const insert = noteBlock.indexOf("'note')");
     assert.ok(lock > 0 && lock < limit && limit < insert);
   });
+
+  it("undoes a pass atomically under the same per-swiper lock", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const undo = apiSrc.slice(apiSrc.indexOf("export const undoPass"), apiSrc.indexOf("export const sendMessage"));
+    const tx = undo.slice(undo.indexOf("withTransaction("));
+    assert.ok(undo.includes("withTransaction("));
+    const lock = tx.indexOf("vela:swipe:${context.userId}");
+    const plus = tx.indexOf("select plus");
+    const del = tx.indexOf("delete from vela_swipes");
+    assert.ok(lock > 0 && lock < plus && plus < del);
+    assert.match(tx, /returning to_user/);
+  });
 });
 
 describe("block and retention hardening", () => {

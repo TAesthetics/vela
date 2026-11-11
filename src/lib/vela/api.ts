@@ -669,25 +669,31 @@ export const undoPass = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
-    const me = await sql<{ plus: boolean | string }>`
-      select plus from vela_profiles where user_id = ${context.userId}
-    `;
-    if (!me[0] || !asBool(me[0].plus)) {
+    // Same per-person lock as swipe: an undo and a parallel swipe (or a double
+    // tap on "Rückgängig") are serialized, and only the request that actually
+    // deleted the pass reports it, so one tap never undoes two passes.
+    const undone = await withTransaction(async (tx): Promise<string | null | false> => {
+      await tx`select pg_advisory_xact_lock(hashtext(${`vela:swipe:${context.userId}`}))`;
+      const me = await tx<{ plus: boolean | string }>`
+        select plus from vela_profiles where user_id = ${context.userId}
+      `;
+      if (!me[0] || !asBool(me[0].plus)) return false;
+      const deleted = await tx<{ to_user: string }>`
+        delete from vela_swipes
+        where from_user = ${context.userId} and direction = 'pass' and to_user = (
+          select to_user from vela_swipes
+          where from_user = ${context.userId} and direction = 'pass'
+          order by created_at desc
+          limit 1
+        )
+        returning to_user
+      `;
+      return deleted[0]?.to_user ?? null;
+    });
+    if (undone === false) {
       return { ok: false, snapshot: await snapshot(sql, context.userId) };
     }
-    const last = await sql<{ to_user: string }>`
-      select to_user from vela_swipes
-      where from_user = ${context.userId} and direction = 'pass'
-      order by created_at desc
-      limit 1
-    `;
-    if (last[0]) {
-      await sql`
-        delete from vela_swipes
-        where from_user = ${context.userId} and to_user = ${last[0].to_user} and direction = 'pass'
-      `;
-    }
-    return { ok: Boolean(last[0]), id: last[0]?.to_user ?? null, snapshot: await snapshot(sql, context.userId) };
+    return { ok: Boolean(undone), id: undone, snapshot: await snapshot(sql, context.userId) };
   });
 
 export const sendMessage = createServerFn({ method: "POST" })
