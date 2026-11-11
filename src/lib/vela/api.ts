@@ -1108,23 +1108,32 @@ export const uploadIdDocument = createServerFn({ method: "POST" })
     if (!clean || clean.length > ID_MAX_BYTES || clean.length < 1000) {
       return { error: "Das Bild ist zu groß oder kein JPEG.", snapshot: await snapshot(sql, context.userId) };
     }
-    const pending = await sql`
-      select 1 from vela_id_checks where user_id = ${context.userId} and status = 'pending' limit 1
-    `;
-    if (pending.length > 0) {
+    // Pending check, retry cap and insert run in one transaction under a
+    // per-person advisory lock, so a double tap or a network retry can't store
+    // the same ID photo twice (two pending rows for the operator to review).
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    const outcome = await withTransaction(async (tx): Promise<"pending" | "limited" | "inserted"> => {
+      await tx`select pg_advisory_xact_lock(hashtext(${`vela:id-upload:${context.userId}`}))`;
+      const pending = await tx`
+        select 1 from vela_id_checks where user_id = ${context.userId} and status = 'pending' limit 1
+      `;
+      if (pending.length > 0) return "pending";
+      // Cap retries after a rejection so a script cannot fill the DB with ID photos.
+      if (!(await consumeRateLimit(tx, `vela:id-upload:${context.userId}`, ID_UPLOAD_RULE))) return "limited";
+      await tx`
+        insert into vela_id_checks (id, user_id, image, status)
+        values (${crypto.randomUUID()}, ${context.userId}, ${Buffer.from(clean).toString("base64")}, 'pending')
+      `;
+      return "inserted";
+    });
+    if (outcome === "pending") {
       return { error: "Dein Ausweis wird schon geprüft.", snapshot: await snapshot(sql, context.userId) };
     }
-    // Cap retries after a rejection so a script cannot fill the DB with ID photos.
-    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
-    if (!(await consumeRateLimit(sql, `vela:id-upload:${context.userId}`, ID_UPLOAD_RULE))) {
+    if (outcome === "limited") {
       return {
         error: "Du hast gerade schon mehrmals einen Ausweis hochgeladen. Versuch es in ein paar Minuten noch einmal.",
         snapshot: await snapshot(sql, context.userId),
       };
     }
-    await sql`
-      insert into vela_id_checks (id, user_id, image, status)
-      values (${crypto.randomUUID()}, ${context.userId}, ${Buffer.from(clean).toString("base64")}, 'pending')
-    `;
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });

@@ -169,6 +169,18 @@ describe("block and retention hardening", () => {
     assert.match(report, /userExists\(sql, toUser\)/);
   });
 
+  it("checks pending ID reviews and inserts an ID upload under one per-person lock", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const upload = apiSrc.slice(apiSrc.indexOf("export const uploadIdDocument"));
+    const tx = upload.slice(upload.indexOf("withTransaction("));
+    assert.ok(upload.includes("withTransaction("));
+    const lock = tx.indexOf("vela:id-upload:${context.userId}`}))");
+    const pending = tx.indexOf("status = 'pending' limit 1");
+    const cap = tx.indexOf("consumeRateLimit(tx");
+    const insert = tx.indexOf("insert into vela_id_checks");
+    assert.ok(lock > 0 && lock < pending && pending < cap && cap < insert);
+  });
+
   it("throttles the retention fallback on app load and header-only cron", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const ageSrc = readFileSync(new URL("./age-review.server.ts", import.meta.url), "utf8");
