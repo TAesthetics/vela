@@ -181,6 +181,21 @@ describe("block and retention hardening", () => {
     assert.ok(lock > 0 && lock < pending && pending < cap && cap < insert);
   });
 
+  it("carries a remembered suspension over and inserts the profile under one per-person lock", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const save = apiSrc.slice(apiSrc.indexOf("export const saveProfile"), apiSrc.indexOf("export const swipe"));
+    const tx = save.slice(save.indexOf("withTransaction("));
+    assert.ok(save.includes("withTransaction("));
+    const lock = tx.indexOf("vela:profile:${context.userId}`}))");
+    const isNew = tx.indexOf("select 1 from vela_profiles");
+    const carry = tx.indexOf("carryOverSuspension(tx");
+    const open = tx.indexOf("openAgeSuspension(tx");
+    const insert = tx.indexOf("insert into vela_profiles");
+    assert.ok(lock > 0 && lock < isNew && isNew < carry && carry < open && open < insert);
+    const del = apiSrc.slice(apiSrc.indexOf("export const deleteProfile"));
+    assert.ok(del.indexOf("vela:profile:${id}`}))") < del.indexOf("delete from vela_profiles"));
+  });
+
   it("throttles the retention fallback on app load and header-only cron", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const ageSrc = readFileSync(new URL("./age-review.server.ts", import.meta.url), "utf8");

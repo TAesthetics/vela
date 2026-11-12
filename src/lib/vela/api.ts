@@ -508,41 +508,48 @@ export const saveProfile = createServerFn({ method: "POST" })
       };
     }
     const me = parsed.me;
+    const review = await ageReview();
     // A suspended person can't edit their way out, and a deleted + re-created
     // profile starts suspended while an age suspension is still open.
     // Only the insert uses this status; an existing row keeps its own.
-    const isNew = (await sql`select 1 from vela_profiles where user_id = ${context.userId}`).length === 0;
-    const carried = isNew ? await (await ageReview()).carryOverSuspension(sql, context.userId) : null;
-    const newStatus =
-      carried === "ban"
-        ? "banned"
-        : carried === "age" || (await openAgeSuspension(sql, context.userId))
-          ? "suspended_age"
-          : "active";
-    await sql.query(
-      `insert into vela_profiles (user_id, name, age, city, orbit, values, prompts, photo, status, adult_confirmed_at)
-       values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, now())
-       on conflict (user_id) do update set
-         adult_confirmed_at = coalesce(vela_profiles.adult_confirmed_at, excluded.adult_confirmed_at),
-         name = excluded.name,
-         age = excluded.age,
-         city = excluded.city,
-         orbit = excluded.orbit,
-         values = excluded.values,
-         prompts = excluded.prompts,
-         photo = excluded.photo`,
-      [
-        context.userId,
-        me.name,
-        me.age,
-        me.city,
-        me.orbit,
-        JSON.stringify(me.values),
-        JSON.stringify(me.prompts),
-        me.photo,
-        newStatus,
-      ],
-    );
+    // One transaction under a per-person lock: carryOverSuspension consumes the
+    // remembered ban, so a double tap on the first save must not let the second
+    // request (which no longer sees it) insert the row as "active" first.
+    await withTransaction(async (tx) => {
+      await tx`select pg_advisory_xact_lock(hashtext(${`vela:profile:${context.userId}`}))`;
+      const isNew = (await tx`select 1 from vela_profiles where user_id = ${context.userId}`).length === 0;
+      const carried = isNew ? await review.carryOverSuspension(tx, context.userId) : null;
+      const newStatus =
+        carried === "ban"
+          ? "banned"
+          : carried === "age" || (await openAgeSuspension(tx, context.userId))
+            ? "suspended_age"
+            : "active";
+      await tx.query(
+        `insert into vela_profiles (user_id, name, age, city, orbit, values, prompts, photo, status, adult_confirmed_at)
+         values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, now())
+         on conflict (user_id) do update set
+           adult_confirmed_at = coalesce(vela_profiles.adult_confirmed_at, excluded.adult_confirmed_at),
+           name = excluded.name,
+           age = excluded.age,
+           city = excluded.city,
+           orbit = excluded.orbit,
+           values = excluded.values,
+           prompts = excluded.prompts,
+           photo = excluded.photo`,
+        [
+          context.userId,
+          me.name,
+          me.age,
+          me.city,
+          me.orbit,
+          JSON.stringify(me.values),
+          JSON.stringify(me.prompts),
+          me.photo,
+          newStatus,
+        ],
+      );
+    });
     // Paid before the profile existed (or re-created it): carry VELA+ over.
     await (await billingServer()).syncPlus(sql, context.userId);
     return { error: null, snapshot: await snapshot(sql, context.userId) };
@@ -960,6 +967,8 @@ export const deleteProfile = createServerFn({ method: "POST" })
     // All or nothing: a failure halfway must not leave an account without
     // messages but with a profile, or a deleted login with leftover data.
     await withTransaction(async (tx) => {
+      // Same lock as saveProfile, so a parallel first save can't slip in between.
+      await tx`select pg_advisory_xact_lock(hashtext(${`vela:profile:${id}`}))`;
       await tx`delete from vela_subscriptions where user_id = ${id}`;
       // An open age suspension must not be dodged by deleting and signing in
       // again: keep only a keyed hash of the login identity (max. 12 months).
