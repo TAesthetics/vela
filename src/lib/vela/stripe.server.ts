@@ -15,20 +15,16 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Sql } from "@/lib/db";
 import { env } from "@/lib/env.server";
 import { checkoutDecision } from "./checkout-reuse";
+import { isActiveStatus, subscriptionUpdate } from "./subscription-state";
 
 export const PLUS_PRICE_CENTS = 1000;
 export const PLUS_CURRENCY = "eur";
-
-/** Subscription states that grant Plus (past_due: Stripe is still retrying). */
-const ACTIVE = new Set(["active", "trialing", "past_due"]);
 
 export function stripeConfigured(): boolean {
   return Boolean(env("STRIPE_SECRET_KEY"));
 }
 
-export function isActiveStatus(status: string | null | undefined): boolean {
-  return Boolean(status && ACTIVE.has(status));
-}
+export { isActiveStatus, subscriptionUpdate };
 
 type Params = Record<string, string | number | boolean | undefined | null>;
 
@@ -135,7 +131,13 @@ export async function createCheckout(
   return session.url;
 }
 
-type CheckoutSession = { id: string; status?: string | null; url?: string | null; created?: number; expires_at?: number };
+type CheckoutSession = {
+  id: string;
+  status?: string | null;
+  url?: string | null;
+  created?: number;
+  expires_at?: number;
+};
 
 /**
  * What to do with the person's last Checkout page: reuse it while it is still
@@ -170,8 +172,12 @@ export async function expireOpenCheckout(sql: Sql, userId: string): Promise<void
   const id = rows[0]?.session_id;
   if (!id) return;
   try {
-    const session = await stripe<CheckoutSession>("GET", `/checkout/sessions/${encodeURIComponent(id)}`);
-    if (session.status === "open") await stripe("POST", `/checkout/sessions/${encodeURIComponent(id)}/expire`);
+    const session = await stripe<CheckoutSession>(
+      "GET",
+      `/checkout/sessions/${encodeURIComponent(id)}`,
+    );
+    if (session.status === "open")
+      await stripe("POST", `/checkout/sessions/${encodeURIComponent(id)}/expire`);
   } catch {
     /* already expired or gone */
   }
@@ -244,6 +250,28 @@ async function fetchSubscription(id: string): Promise<StripeSubscription> {
 }
 
 /**
+ * Stripe sends webhooks in no guaranteed order and retries old ones, so the
+ * event payload can be stale (a late "active" after "canceled" would hand out
+ * free Plus). We therefore always re-read the subscription from Stripe and
+ * store that, one event per person at a time (advisory lock), so the row
+ * always ends at Stripe's current state whatever order events arrive in.
+ */
+async function applySubscription(
+  userId: string,
+  subId: string,
+  fromCheckout: boolean,
+): Promise<void> {
+  const { withTransaction } = await import("@/lib/db");
+  await withTransaction(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtext(${`vela:billing:${userId}`}))`;
+    const sub = await fetchSubscription(subId);
+    const current = await billingOf(tx, userId);
+    if (subscriptionUpdate(current, sub, fromCheckout) === "save")
+      await saveSubscription(tx, userId, sub);
+  });
+}
+
+/**
  * Verifies the `Stripe-Signature` header (HMAC-SHA256 over "t.payload").
  * Returns false for anything missing, malformed, stale or wrong.
  */
@@ -284,35 +312,27 @@ export async function handleEvent(sql: Sql, event: StripeEvent): Promise<void> {
       if (object.mode !== "subscription") return;
       const userId =
         (object.client_reference_id as string | null) ??
-        ((object.metadata as Record<string, string> | undefined)?.user_id ?? null);
+        (object.metadata as Record<string, string> | undefined)?.user_id ??
+        null;
       const subId = typeof object.subscription === "string" ? object.subscription : null;
       if (!userId || !subId) return;
-      await saveSubscription(sql, userId, await fetchSubscription(subId));
+      await applySubscription(userId, subId, true);
       return;
     }
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
       const sub = object as unknown as StripeSubscription;
-      const userId = sub.metadata?.user_id || (await userForCustomer(sql, customerId(sub.customer)));
+      if (!sub.id) return;
+      const userId =
+        sub.metadata?.user_id || (await userForCustomer(sql, customerId(sub.customer)));
       if (!userId) return;
-      const current = await billingOf(sql, userId);
-      // Account already deleted (row removed): don't re-create anything.
-      if (!current && !isActiveStatus(sub.status)) return;
-      // Ignore stale events for an older subscription of the same person.
-      if (
-        current?.stripe_subscription_id &&
-        current.stripe_subscription_id !== sub.id &&
-        isActiveStatus(current.status) &&
-        !isActiveStatus(sub.status)
-      ) {
-        return;
-      }
-      await saveSubscription(sql, userId, sub);
+      await applySubscription(userId, sub.id, false);
       return;
     }
     case "invoice.payment_failed": {
-      const parent = object.parent as { subscription_details?: { subscription?: string } } | undefined;
+      const parent = object.parent as
+        { subscription_details?: { subscription?: string } } | undefined;
       const subId =
         (typeof object.subscription === "string" ? object.subscription : null) ??
         parent?.subscription_details?.subscription ??
@@ -320,7 +340,7 @@ export async function handleEvent(sql: Sql, event: StripeEvent): Promise<void> {
       const userId = await userForCustomer(sql, customerId(object.customer as string | null));
       if (!userId || !subId) return;
       // Re-read the subscription: Stripe decides past_due / unpaid / canceled.
-      await saveSubscription(sql, userId, await fetchSubscription(subId));
+      await applySubscription(userId, subId, true);
       return;
     }
     default:
