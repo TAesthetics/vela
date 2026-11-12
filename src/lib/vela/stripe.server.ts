@@ -14,6 +14,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Sql } from "@/lib/db";
 import { env } from "@/lib/env.server";
+import { checkoutDecision } from "./checkout-reuse";
 
 export const PLUS_PRICE_CENTS = 1000;
 export const PLUS_CURRENCY = "eur";
@@ -122,9 +123,58 @@ export async function createCheckout(
   }
   if (existing?.stripe_customer_id) params.customer = existing.stripe_customer_id;
   else if (user.email) params.customer_email = user.email;
-  const session = await stripe<{ url?: string }>("POST", "/checkout/sessions", params);
+  const session = await stripe<{ id?: string; url?: string }>("POST", "/checkout/sessions", params);
   if (!session.url) throw new StripeError("Stripe hat keine Checkout-Seite geliefert.");
+  if (session.id) {
+    await sql`
+      insert into vela_checkout_sessions (user_id, session_id, created_at)
+      values (${user.id}, ${session.id}, now())
+      on conflict (user_id) do update set session_id = excluded.session_id, created_at = now()
+    `;
+  }
   return session.url;
+}
+
+type CheckoutSession = { id: string; status?: string | null; url?: string | null; created?: number; expires_at?: number };
+
+/**
+ * What to do with the person's last Checkout page: reuse it while it is still
+ * open (same URL, so a double tap or a second tab never opens a second payment
+ * page), report "activating" right after it was paid, otherwise start fresh.
+ * Lookup failures fall back to a new page.
+ */
+export async function reusableCheckout(
+  sql: Sql,
+  userId: string,
+  now = Math.floor(Date.now() / 1000),
+): Promise<{ url: string } | { completing: true } | null> {
+  const rows = await sql<{ session_id: string }>`
+    select session_id from vela_checkout_sessions where user_id = ${userId}
+  `;
+  const id = rows[0]?.session_id;
+  if (!id) return null;
+  let session: CheckoutSession;
+  try {
+    session = await stripe<CheckoutSession>("GET", `/checkout/sessions/${encodeURIComponent(id)}`);
+  } catch {
+    return null;
+  }
+  return checkoutDecision(session, now);
+}
+
+/** Closes the person's still-open Checkout page (account deletion). Best effort. */
+export async function expireOpenCheckout(sql: Sql, userId: string): Promise<void> {
+  const rows = await sql<{ session_id: string }>`
+    select session_id from vela_checkout_sessions where user_id = ${userId}
+  `;
+  const id = rows[0]?.session_id;
+  if (!id) return;
+  try {
+    const session = await stripe<CheckoutSession>("GET", `/checkout/sessions/${encodeURIComponent(id)}`);
+    if (session.status === "open") await stripe("POST", `/checkout/sessions/${encodeURIComponent(id)}/expire`);
+  } catch {
+    /* already expired or gone */
+  }
 }
 
 /** Stripe billing portal ("Abo verwalten"): cancel, change card, invoices. */

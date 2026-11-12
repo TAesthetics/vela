@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { swipeCapHit, SWIPE_CAPS, isUnveiled, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
 import { isObjectionable, normalizeForFilter } from "./content-filter.ts";
+import { checkoutDecision } from "./checkout-reuse.ts";
 
 describe("veil", () => {
   it("stays closed until both people have written enough", () => {
@@ -249,5 +250,29 @@ describe("block and retention hardening", () => {
     assert.match(perms, /camera=\(\)/);
     assert.match(perms, /usb=\(\)/);
     assert.match(perms, /browsing-topics=\(\)/);
+  });
+});
+
+describe("VELA+ checkout reuse", () => {
+  const now = 1_800_000_000;
+  it("reuses an open page, waits after payment, otherwise starts fresh", () => {
+    assert.deepEqual(checkoutDecision({ status: "open", url: "https://pay", expires_at: now + 3600 }, now), { url: "https://pay" });
+    assert.equal(checkoutDecision({ status: "open", url: "https://pay", expires_at: now + 30 }, now), null);
+    assert.deepEqual(checkoutDecision({ status: "complete", created: now - 60 }, now), { completing: true });
+    assert.equal(checkoutDecision({ status: "complete", created: now - 3600 }, now), null);
+    assert.equal(checkoutDecision({ status: "expired", url: null }, now), null);
+  });
+
+  it("looks up and creates the checkout page under one per-person lock", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const checkout = apiSrc.slice(apiSrc.indexOf("export const startPlusCheckout"), apiSrc.indexOf("export const openPlusPortal"));
+    const tx = checkout.slice(checkout.indexOf("withTransaction("));
+    const lock = tx.indexOf("vela:checkout:${context.userId}");
+    const reuse = tx.indexOf("reusableCheckout(tx");
+    const create = tx.indexOf("createCheckout(tx");
+    assert.ok(lock > 0 && lock < reuse && reuse < create);
+    const del = apiSrc.slice(apiSrc.indexOf("export const deleteProfile"), apiSrc.indexOf("export const exportMyData"));
+    assert.match(del, /expireOpenCheckout\(sql, id\)/);
+    assert.match(del, /delete from vela_checkout_sessions/);
   });
 });

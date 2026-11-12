@@ -798,13 +798,18 @@ export const startPlusCheckout = createServerFn({ method: "POST" })
     const current = await stripe.billingOf(sql, context.userId);
     if (current && stripe.isActiveStatus(current.status)) return { url: null, error: "Vela+ ist schon aktiv." };
     const users = await sql<{ email: string | null }>`select email from "user" where id = ${context.userId}`;
+    const origin = await appOrigin();
     try {
-      const url = await stripe.createCheckout(
-        sql,
-        { id: context.userId, email: users[0]?.email ?? null },
-        await appOrigin(),
-      );
-      return { url, error: null };
+      // One payment page per person at a time: a double tap or a second tab
+      // gets the same open page, so nobody can end up with two subscriptions.
+      return await withTransaction(async (tx) => {
+        await tx`select pg_advisory_xact_lock(hashtext(${`vela:checkout:${context.userId}`}))`;
+        const reuse = await stripe.reusableCheckout(tx, context.userId);
+        if (reuse && "url" in reuse) return { url: reuse.url, error: null };
+        if (reuse) return { url: null, error: "Deine Zahlung ist eingegangen, VELA+ wird gerade aktiviert." };
+        const url = await stripe.createCheckout(tx, { id: context.userId, email: users[0]?.email ?? null }, origin);
+        return { url, error: null };
+      });
     } catch {
       return { url: null, error: "Die Bezahlseite ließ sich nicht öffnen. Versuch es gleich nochmal." };
     }
@@ -951,6 +956,8 @@ export const deleteProfile = createServerFn({ method: "POST" })
         }
       }
     }
+    // An open payment page must not turn into a subscription after deletion.
+    await stripe.expireOpenCheckout(sql, id);
     // End the session first so its cookies are cleared in this response. If the
     // deletion below fails, the person is only signed out and can try again.
     try {
@@ -970,6 +977,7 @@ export const deleteProfile = createServerFn({ method: "POST" })
       // Same lock as saveProfile, so a parallel first save can't slip in between.
       await tx`select pg_advisory_xact_lock(hashtext(${`vela:profile:${id}`}))`;
       await tx`delete from vela_subscriptions where user_id = ${id}`;
+      await tx`delete from vela_checkout_sessions where user_id = ${id}`;
       // An open age suspension must not be dodged by deleting and signing in
       // again: keep only a keyed hash of the login identity (max. 12 months).
       // Same for a rule ban.
