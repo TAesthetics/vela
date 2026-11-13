@@ -741,8 +741,12 @@ export const sendMessage = createServerFn({ method: "POST" })
     // same text within a few seconds doesn't post the message twice.
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
     const [pairA, pairB] = pairOf(context.userId, toUser);
-    const outcome = await withTransaction(async (tx): Promise<"duplicate" | "limited" | "inserted"> => {
+    const outcome = await withTransaction(async (tx): Promise<"duplicate" | "limited" | "ended" | "inserted"> => {
       await tx`select pg_advisory_xact_lock(hashtext(${`vela:message:${context.userId}`}))`;
+      // Re-check under the pair lock (insertBlock takes it too), so a block
+      // that lands while this request is in flight always wins.
+      await tx`select pg_advisory_xact_lock(hashtext(${pairLockKey(context.userId, toUser)}))`;
+      if (!(await canInteract(tx, context.userId, toUser))) return "ended";
       const same = await tx`
         select 1 from vela_messages
         where pair_a = ${pairA} and pair_b = ${pairB} and from_user = ${context.userId}
@@ -765,6 +769,9 @@ export const sendMessage = createServerFn({ method: "POST" })
     });
     if (outcome === "limited") {
       return { error: "Kurz durchatmen. Gleich geht es weiter.", snapshot: await snapshot(sql, context.userId) };
+    }
+    if (outcome === "ended") {
+      return { error: "Dieses Gespräch ist beendet.", snapshot: await snapshot(sql, context.userId) };
     }
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
@@ -835,11 +842,22 @@ export const openPlusPortal = createServerFn({ method: "POST" })
     }
   });
 
-async function insertBlock(sql: Sql, from: string, to: string) {
-  await sql`
-    insert into vela_blocks (from_user, to_user) values (${from}, ${to})
-    on conflict (from_user, to_user) do nothing
-  `;
+/** Per-pair advisory lock key, shared by blocking and sending a message. */
+function pairLockKey(a: string, b: string) {
+  const [pairA, pairB] = pairOf(a, b);
+  return `vela:pair:${pairA}:${pairB}`;
+}
+
+async function insertBlock(_sql: Sql, from: string, to: string) {
+  // Under the pair lock that sendMessage also takes: once a block returns, a
+  // message that was already past its first block check can't land after it.
+  await withTransaction(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtext(${pairLockKey(from, to)}))`;
+    await tx`
+      insert into vela_blocks (from_user, to_user) values (${from}, ${to})
+      on conflict (from_user, to_user) do nothing
+    `;
+  });
 }
 
 /** True when the id exists as a Better Auth user row (not self — callers check that). */

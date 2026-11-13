@@ -167,6 +167,20 @@ describe("block and retention hardening", () => {
     assert.doesNotMatch(block, /set status = 'active', suspended_at = null where user_id = \$\{userId\}`/);
   });
 
+  it("blocking and sending share a pair lock, and sendMessage re-checks under it", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const insertBlock = apiSrc.slice(apiSrc.indexOf("async function insertBlock"), apiSrc.indexOf("async function userExists"));
+    const blockLock = insertBlock.indexOf("pairLockKey(from, to)");
+    assert.ok(blockLock > 0 && blockLock < insertBlock.indexOf("insert into vela_blocks"));
+    const send = apiSrc.slice(apiSrc.indexOf("export const sendMessage"), apiSrc.indexOf("export const setPlus"));
+    const tx = send.slice(send.indexOf("withTransaction("));
+    const pairLock = tx.indexOf("pairLockKey(context.userId, toUser)");
+    const recheck = tx.indexOf("canInteract(tx, context.userId, toUser)");
+    const insert = tx.indexOf("insert into vela_messages");
+    assert.ok(pairLock > 0 && pairLock < recheck && recheck < insert);
+    assert.match(send, /outcome === "ended"/);
+  });
+
   it("rate-limits blockUser and checks the target exists before insert", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const block = apiSrc.slice(apiSrc.indexOf("export const blockUser"), apiSrc.indexOf("export const reportUser"));
