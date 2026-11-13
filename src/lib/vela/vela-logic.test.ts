@@ -159,6 +159,14 @@ describe("swipeCapHit", () => {
 });
 
 describe("block and retention hardening", () => {
+  it("lets an approved ID lift only an age suspension, never a rule ban", () => {
+    const adminSrc = readFileSync(new URL("./admin-api.ts", import.meta.url), "utf8");
+    const start = adminSrc.indexOf("export const decideIdCheck");
+    const block = adminSrc.slice(start, adminSrc.indexOf("export const resolveReport"));
+    assert.match(block, /set status = 'active'[\s\S]*?and status = 'suspended_age'/);
+    assert.doesNotMatch(block, /set status = 'active', suspended_at = null where user_id = \$\{userId\}`/);
+  });
+
   it("rate-limits blockUser and checks the target exists before insert", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const block = apiSrc.slice(apiSrc.indexOf("export const blockUser"), apiSrc.indexOf("export const reportUser"));

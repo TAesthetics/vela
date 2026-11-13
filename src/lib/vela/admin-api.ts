@@ -172,7 +172,7 @@ export const loadAdmin = createServerFn({ method: "GET" })
     return load(sql);
   });
 
-/** Approve → unban; reject → stays banned. Either way the ID image is deleted now. */
+/** Approve → lifts the age suspension (not a rule ban); reject → stays suspended. Either way the ID image is deleted now. */
 export const decideIdCheck = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { id?: string; approve?: boolean }) => input)
@@ -189,7 +189,12 @@ export const decideIdCheck = createServerFn({ method: "POST" })
     `;
     const userId = rows[0]?.user_id;
     if (userId && approve) {
-      await sql`update vela_profiles set status = 'active', suspended_at = null where user_id = ${userId}`;
+      // An approved ID only proves age: it lifts an age suspension, never a
+      // rule ban the operator set while the upload was still waiting.
+      await sql`
+        update vela_profiles set status = 'active', suspended_at = null
+        where user_id = ${userId} and status = 'suspended_age'
+      `;
     }
     return load(sql);
   });
