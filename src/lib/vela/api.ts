@@ -981,8 +981,10 @@ export const deleteProfile = createServerFn({ method: "POST" })
       // An open age suspension must not be dodged by deleting and signing in
       // again: keep only a keyed hash of the login identity (max. 12 months).
       // Same for a rule ban.
-      if ((await statusOf(tx, id)) === "banned") await review.rememberSuspendedIdentity(tx, id, "ban");
-      else if (await openAgeSuspension(tx, id)) await review.rememberSuspendedIdentity(tx, id);
+      const banned = (await statusOf(tx, id)) === "banned";
+      const ageOpen = await openAgeSuspension(tx, id);
+      if (banned) await review.rememberSuspendedIdentity(tx, id, ageOpen ? "ban_age" : "ban");
+      else if (ageOpen) await review.rememberSuspendedIdentity(tx, id);
       await tx`delete from vela_messages where pair_a = ${id} or pair_b = ${id}`;
       await tx`delete from vela_swipes where from_user = ${id} or to_user = ${id}`;
       await tx`delete from vela_blocks where from_user = ${id} or to_user = ${id}`;

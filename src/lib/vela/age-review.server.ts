@@ -162,44 +162,76 @@ async function identityHashes(sql: Sql, userId: string): Promise<string[]> {
 
 export type CarriedSuspension = "age" | "ban";
 
+/** What gets remembered on deletion: an age suspension, a rule ban, or both. */
+export type RememberedSuspension = CarriedSuspension | "ban_age";
+
+const REMEMBERED_REASON: Record<RememberedSuspension, string> = {
+  age: "age_suspension",
+  ban: "ban",
+  ban_age: "ban_age",
+};
+
 /**
- * Before deleting an account with an open age suspension or a rule ban:
- * remember the identity (keyed hash only) and why.
+ * Which suspensions the remembered reasons carry over. A ban that hid an open
+ * age suspension ("ban_age") carries both, so lifting the ban later puts the
+ * age suspension back instead of unlocking the account.
  */
-export async function rememberSuspendedIdentity(sql: Sql, userId: string, kind: CarriedSuspension = "age") {
-  const reason = kind === "ban" ? "ban" : "age_suspension";
+export function carriedFromReasons(reasons: string[]): { ban: boolean; age: boolean } {
+  return {
+    ban: reasons.some((r) => r === "ban" || r === "ban_age"),
+    age: reasons.some((r) => r === "age_suspension" || r === "ban_age"),
+  };
+}
+
+/**
+ * Before deleting an account with an open age suspension or a rule ban (or
+ * both): remember the identity (keyed hash only) and why.
+ */
+export async function rememberSuspendedIdentity(sql: Sql, userId: string, kind: RememberedSuspension = "age") {
+  const reason = REMEMBERED_REASON[kind];
   for (const hash of await identityHashes(sql, userId)) {
+    // Merge with an earlier entry instead of overwriting: neither a ban nor an
+    // age suspension may get lost.
     await sql`
       insert into vela_deleted_identities (identity_hash, reason)
       values (${hash}, ${reason})
       on conflict (identity_hash) do update set created_at = now(),
-        reason = case when vela_deleted_identities.reason = 'ban' then 'ban' else excluded.reason end
+        reason = case
+          when vela_deleted_identities.reason in ('ban', 'ban_age') or excluded.reason in ('ban', 'ban_age')
+            then case
+              when vela_deleted_identities.reason in ('age_suspension', 'ban_age')
+                or excluded.reason in ('age_suspension', 'ban_age')
+              then 'ban_age' else 'ban' end
+          else 'age_suspension'
+        end
     `;
   }
 }
 
 /**
  * On a new profile: if this login identity was deleted while suspended (within
- * 12 months), carry the suspension over to the new user id.
+ * 12 months), carry the suspension over to the new user id. A carried ban that
+ * also hid an age suspension records both flags, so liftRuleBan re-opens the
+ * age suspension.
  */
 export async function carryOverSuspension(sql: Sql, userId: string): Promise<CarriedSuspension | null> {
   const hashes = await identityHashes(sql, userId);
-  let carried: CarriedSuspension | null = null;
+  const reasons: string[] = [];
   for (const hash of hashes) {
     const hit = await sql<{ reason: string }>`
       delete from vela_deleted_identities
       where identity_hash = ${hash} and created_at > now() - interval '12 months'
       returning reason
     `;
-    for (const row of hit) {
-      if (row.reason === "ban") carried = "ban";
-      else carried ??= "age";
-    }
+    for (const row of hit) reasons.push(row.reason);
   }
-  if (carried === "ban") {
-    await recordFlag(sql, userId, "operator", "banned", ["Sperre (Regelverstoß) nach Löschen und Neuanmeldung übernommen"]);
-  } else if (carried === "age") {
+  const { ban, age } = carriedFromReasons(reasons);
+  if (age) {
     await recordFlag(sql, userId, "operator", "suspended", ["Sperre nach Löschen und Neuanmeldung übernommen"]);
   }
-  return carried;
+  if (ban) {
+    await recordFlag(sql, userId, "operator", "banned", ["Sperre (Regelverstoß) nach Löschen und Neuanmeldung übernommen"]);
+    return "ban";
+  }
+  return age ? "age" : null;
 }

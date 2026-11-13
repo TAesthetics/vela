@@ -284,3 +284,24 @@ describe("VELA+ checkout reuse", () => {
     assert.match(del, /delete from vela_checkout_sessions/);
   });
 });
+
+describe("ban plus age suspension survive deletion", () => {
+  it("carries both when a ban hid an open age suspension", async () => {
+    const { carriedFromReasons } = await import("./age-review.server.ts");
+    assert.deepEqual(carriedFromReasons([]), { ban: false, age: false });
+    assert.deepEqual(carriedFromReasons(["age_suspension"]), { ban: false, age: true });
+    assert.deepEqual(carriedFromReasons(["ban"]), { ban: true, age: false });
+    assert.deepEqual(carriedFromReasons(["ban_age"]), { ban: true, age: true });
+    assert.deepEqual(carriedFromReasons(["ban", "age_suspension"]), { ban: true, age: true });
+  });
+
+  it("remembers ban_age on delete and records the age flag on carry-over", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const ageSrc = readFileSync(new URL("./age-review.server.ts", import.meta.url), "utf8");
+    const del = apiSrc.slice(apiSrc.indexOf("export const deleteProfile"));
+    assert.match(del, /rememberSuspendedIdentity\(tx, id, ageOpen \? "ban_age" : "ban"\)/);
+    const carry = ageSrc.slice(ageSrc.indexOf("export async function carryOverSuspension"));
+    assert.ok(carry.indexOf('"suspended"') > 0 && carry.indexOf('"suspended"') < carry.indexOf('return "ban"'));
+    assert.match(ageSrc, /then 'ban_age' else 'ban' end/);
+  });
+});
