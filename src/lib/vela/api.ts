@@ -857,16 +857,21 @@ function pairLockKey(a: string, b: string) {
   return `vela:pair:${pairA}:${pairB}`;
 }
 
+/**
+ * Block inside an open transaction, under the pair lock that sendMessage and
+ * swipe also take: once it commits, a message or match that was already past
+ * its first block check can't land after it. Pair lock is always taken last.
+ */
+async function blockInTx(tx: Sql, from: string, to: string) {
+  await tx`select pg_advisory_xact_lock(hashtext(${pairLockKey(from, to)}))`;
+  await tx`
+    insert into vela_blocks (from_user, to_user) values (${from}, ${to})
+    on conflict (from_user, to_user) do nothing
+  `;
+}
+
 async function insertBlock(_sql: Sql, from: string, to: string) {
-  // Under the pair lock that sendMessage also takes: once a block returns, a
-  // message that was already past its first block check can't land after it.
-  await withTransaction(async (tx) => {
-    await tx`select pg_advisory_xact_lock(hashtext(${pairLockKey(from, to)}))`;
-    await tx`
-      insert into vela_blocks (from_user, to_user) values (${from}, ${to})
-      on conflict (from_user, to_user) do nothing
-    `;
-  });
+  await withTransaction((tx) => blockInTx(tx, from, to));
 }
 
 /** True when the id exists as a Better Auth user row (not self — callers check that). */
@@ -924,6 +929,10 @@ export const reportUser = createServerFn({ method: "POST" })
       const already = await tx`
         select 1 from vela_reports where from_user = ${context.userId} and to_user = ${toUser} limit 1
       `;
+      // Reporting always blocks, in the same transaction as the report row, so
+      // there is never a report without its block (or a block lost on error).
+      // Lock order: reporter lock, then pair lock (same as message/swipe).
+      await blockInTx(tx, context.userId, toUser);
       if (already.length > 0) return "duplicate";
       const recent = await tx<{ n: number | string }>`
         select count(*) as n from vela_reports
@@ -939,25 +948,18 @@ export const reportUser = createServerFn({ method: "POST" })
         insert into vela_reports (id, from_user, to_user, reason, details)
         values (${crypto.randomUUID()}, ${context.userId}, ${toUser}, ${reason}, ${details})
       `;
+      if (reason === "minor" && !(await ageVerified(tx, toUser))) {
+        // No automatic action: the operator reviews it on /admin/age.
+        await (await ageReview()).recordFlag(tx, toUser, "report", "review", ["Gemeldet: Minderjährig"]);
+      }
       return "inserted";
     });
-    if (outcome === "duplicate") {
-      await insertBlock(sql, context.userId, toUser);
-      return { error: null, snapshot: await snapshot(sql, context.userId) };
-    }
     if (outcome === "capped") {
-      // Still block, so the person is out of sight; just no new report row.
-      await insertBlock(sql, context.userId, toUser);
+      // Still blocked (above), so the person is out of sight; just no new report row.
       return {
         error: "Du hast heute schon viele Meldungen geschickt. Die Person ist blockiert, wir schauen uns die bisherigen an.",
         snapshot: await snapshot(sql, context.userId),
       };
-    }
-    // Reporting always blocks, so the reporter never sees this person again.
-    await insertBlock(sql, context.userId, toUser);
-    if (reason === "minor" && !(await ageVerified(sql, toUser))) {
-      // No automatic action: the operator reviews it on /admin/age.
-      await (await ageReview()).recordFlag(sql, toUser, "report", "review", ["Gemeldet: Minderjährig"]);
     }
     return { error: null, snapshot: await snapshot(sql, context.userId) };
   });

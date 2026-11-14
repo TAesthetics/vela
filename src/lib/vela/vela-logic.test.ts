@@ -169,7 +169,7 @@ describe("block and retention hardening", () => {
 
   it("blocking and sending share a pair lock, and sendMessage re-checks under it", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
-    const insertBlock = apiSrc.slice(apiSrc.indexOf("async function insertBlock"), apiSrc.indexOf("async function userExists"));
+    const insertBlock = apiSrc.slice(apiSrc.indexOf("async function blockInTx"), apiSrc.indexOf("async function userExists"));
     const blockLock = insertBlock.indexOf("pairLockKey(from, to)");
     assert.ok(blockLock > 0 && blockLock < insertBlock.indexOf("insert into vela_blocks"));
     const send = apiSrc.slice(apiSrc.indexOf("export const sendMessage"), apiSrc.indexOf("export const setPlus"));
@@ -196,6 +196,18 @@ describe("block and retention hardening", () => {
     const noteInsert = note.indexOf("insert into vela_messages");
     // Same lock order as sendMessage (sender lock, then pair lock), so no deadlock.
     assert.ok(noteMsgLock > 0 && noteMsgLock < notePair && notePair < noteRecheck && noteRecheck < noteInsert);
+  });
+
+  it("reportUser blocks inside the report transaction, reporter lock first", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const report = apiSrc.slice(apiSrc.indexOf("export const reportUser"), apiSrc.indexOf("export const deleteProfile"));
+    const tx = report.slice(report.indexOf("withTransaction("));
+    const reporterLock = tx.indexOf("vela:report:${context.userId}");
+    const block = tx.indexOf("blockInTx(tx, context.userId, toUser)");
+    const insert = tx.indexOf("insert into vela_reports");
+    const flag = tx.indexOf("recordFlag(tx, toUser");
+    assert.ok(reporterLock > 0 && reporterLock < block && block < insert && insert < flag);
+    assert.doesNotMatch(report, /insertBlock\(/);
   });
 
   it("rate-limits blockUser and checks the target exists before insert", () => {
