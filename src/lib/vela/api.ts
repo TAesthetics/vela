@@ -610,6 +610,11 @@ export const swipe = createServerFn({ method: "POST" })
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
     const outcome = await withTransaction(async (tx): Promise<"limit" | "skip" | "inserted"> => {
       await tx`select pg_advisory_xact_lock(hashtext(${`vela:swipe:${context.userId}`}))`;
+      // Re-check under the pair lock (insertBlock takes it too), so a block or
+      // ban that lands while this swipe is in flight always wins: no spark and
+      // no match can be stored after it.
+      await tx`select pg_advisory_xact_lock(hashtext(${pairLockKey(context.userId, toUser)}))`;
+      if (!(await canInteract(tx, context.userId, toUser))) return "skip";
       const me = await tx<{ plus: boolean | string }>`
         select plus from vela_profiles where user_id = ${context.userId}
       `;
@@ -654,6 +659,10 @@ export const swipe = createServerFn({ method: "POST" })
       const [pairA, pairB] = pairOf(context.userId, toUser);
       await withTransaction(async (tx) => {
         await tx`select pg_advisory_xact_lock(hashtext(${`vela:message:${context.userId}`}))`;
+        // Same pair lock and re-check as sendMessage: a block that landed
+        // between the swipe and its note keeps the note out.
+        await tx`select pg_advisory_xact_lock(hashtext(${pairLockKey(context.userId, toUser)}))`;
+        if (!(await canInteract(tx, context.userId, toUser))) return;
         if (await messageLimitHit(tx, context.userId)) return;
         await tx`
           insert into vela_messages (id, pair_a, pair_b, from_user, body, kind)

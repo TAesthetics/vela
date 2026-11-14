@@ -181,6 +181,23 @@ describe("block and retention hardening", () => {
     assert.match(send, /outcome === "ended"/);
   });
 
+  it("swipe and its spark note re-check blocks under the pair lock before inserting", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const swipe = apiSrc.slice(apiSrc.indexOf("export const swipe"), apiSrc.indexOf("export const undoPass"));
+    const first = swipe.slice(swipe.indexOf("withTransaction("));
+    const pairLock = first.indexOf("pairLockKey(context.userId, toUser)");
+    const recheck = first.indexOf("canInteract(tx, context.userId, toUser)");
+    const insert = first.indexOf("insert into vela_swipes");
+    assert.ok(pairLock > 0 && pairLock < recheck && recheck < insert);
+    const note = swipe.slice(swipe.lastIndexOf("withTransaction("));
+    const noteMsgLock = note.indexOf("vela:message:${context.userId}");
+    const notePair = note.indexOf("pairLockKey(context.userId, toUser)");
+    const noteRecheck = note.indexOf("canInteract(tx, context.userId, toUser)");
+    const noteInsert = note.indexOf("insert into vela_messages");
+    // Same lock order as sendMessage (sender lock, then pair lock), so no deadlock.
+    assert.ok(noteMsgLock > 0 && noteMsgLock < notePair && notePair < noteRecheck && noteRecheck < noteInsert);
+  });
+
   it("rate-limits blockUser and checks the target exists before insert", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const block = apiSrc.slice(apiSrc.indexOf("export const blockUser"), apiSrc.indexOf("export const reportUser"));
