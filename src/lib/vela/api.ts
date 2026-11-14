@@ -278,6 +278,14 @@ async function suspensionSnapshot(sql: Sql, userId: string, profileStatus: strin
   };
 }
 
+/** Photo of a match whose veil has lifted; callers check isUnveiled first. */
+async function unveiledPhoto(sql: Sql, userId: string): Promise<string | null> {
+  const rows = await sql<{ photo: string | null }>`
+    select photo from vela_profiles where user_id = ${userId} and status = 'active'
+  `;
+  return rows[0]?.photo ?? null;
+}
+
 async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
   const day = berlinDay();
   const mine = await sql<ProfileRow>`
@@ -333,8 +341,11 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
     limit 40
   `;
   const inboundRows = deckRows.filter((row) => asBool(row.sparked_you));
-  const matchRows = await sql<ProfileRow & { photo: string | null }>`
-    select p.user_id, p.name, p.age, p.city, p.orbit, p.values, p.prompts, p.photo, p.plus
+  // No photo column here either: photos of matches are loaded below, one by one,
+  // only for matches whose veil has actually lifted, so a veiled photo is never
+  // even read from the database for this request.
+  const matchRows = await sql<ProfileRow>`
+    select p.user_id, p.name, p.age, p.city, p.orbit, p.values, p.prompts, p.plus
     from vela_swipes mine
     join vela_swipes theirs
       on theirs.from_user = mine.to_user
@@ -365,7 +376,7 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
     order by created_at asc
   `;
 
-  const threads: Thread[] = matchRows.map((row) => {
+  const threads: Thread[] = (await Promise.all(matchRows.map(async (row) => {
     const [pairA, pairB] = pairOf(userId, row.user_id);
     const messages: Message[] = messageRows
       .filter((message) => message.pair_a === pairA && message.pair_b === pairB)
@@ -378,21 +389,22 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
       }));
     // The veil lifts only when BOTH people have each written VEIL_AFTER chat
     // messages in this match. Spark notes never count. Enforced here, server-side:
-    // matchRows is the only place other people's photos are selected, and the
-    // photo is not sent to the client until both sides clear VEIL_AFTER.
+    // this is the only place other people's photos are selected, and the photo
+    // is not even loaded until both sides clear VEIL_AFTER.
     const chat = messages.filter((message) => message.kind === "message");
     const mineCount = chat.filter((message) => message.from === "me").length;
     const theirCount = chat.filter((message) => message.from === "them").length;
     const unveiled = isUnveiled(mineCount, theirCount);
+    const photo = unveiled ? await unveiledPhoto(sql, row.user_id) : null;
     return {
       person: toPerson(row, true),
-      photo: unveiled ? row.photo : null,
+      photo,
       unveiled,
       mineCount,
       theirCount,
       messages,
     };
-  });
+  })));
 
   return {
     me: meRow ? toMe(meRow) : null,

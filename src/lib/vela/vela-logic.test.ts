@@ -24,7 +24,7 @@ describe("veil", () => {
     const person = dataSrc.slice(dataSrc.indexOf("export type Person"), dataSrc.indexOf("export type Message"));
     assert.ok(!/photo/.test(person), "Person (deck/inbound cards) must not carry a photo");
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
-    assert.match(apiSrc, /photo: unveiled \? row\.photo : null/);
+    assert.match(apiSrc, /const photo = unveiled \? await unveiledPhoto\(sql, row\.user_id\) : null;/);
   });
 
   it("does not SELECT other people's photos for the deck or swipe target", () => {
@@ -35,8 +35,12 @@ describe("veil", () => {
     const swipe = apiSrc.slice(apiSrc.indexOf("export const swipe"), apiSrc.indexOf("export const undoPass"));
     assert.ok(swipe.includes("from vela_profiles where user_id"), "swipe target query missing");
     assert.ok(!/prompts, photo, plus/.test(swipe), "swipe target must not load photo");
-    // Matches are the only place other portraits leave the DB — and only after unveil.
-    assert.match(apiSrc, /const matchRows[\s\S]*?p\.photo[\s\S]*?from vela_swipes mine/);
+    // Matches are the only place other portraits leave the DB — and only after
+    // unveil: the match query itself never reads photos, unveiledPhoto() does.
+    const matches = apiSrc.slice(apiSrc.indexOf("const matchRows"), apiSrc.indexOf("const messageRows"));
+    assert.ok(matches.includes("from vela_swipes mine"), "match query missing");
+    assert.ok(!/\bp\.photo\b/.test(matches), "match query must not load photos before the unveil check");
+    assert.equal(apiSrc.match(/unveiledPhoto\(/g)?.length, 2, "unveiledPhoto must have exactly one caller");
   });
 });
 
