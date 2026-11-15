@@ -361,25 +361,25 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
       )
     order by mine.created_at desc
   `;
-  const messageRows = await sql<{
-    id: string;
-    pair_a: string;
-    pair_b: string;
-    from_user: string;
-    body: string;
-    kind: string;
-    created_at: unknown;
-  }>`
-    select id, pair_a, pair_b, from_user, body, kind, created_at
-    from vela_messages
-    where pair_a = ${userId} or pair_b = ${userId}
-    order by created_at asc
-  `;
-
   const threads: Thread[] = (await Promise.all(matchRows.map(async (row) => {
     const [pairA, pairB] = pairOf(userId, row.user_id);
+    // One indexed query per active match (vela_messages_pair_idx on
+    // pair_a, pair_b, created_at). Never "pair_a = me or pair_b = me": that
+    // can't use the index for the pair_b side (full scan on every poll) and
+    // would also load conversations with blocked or suspended people.
+    const messageRows = await sql<{
+      id: string;
+      from_user: string;
+      body: string;
+      kind: string;
+      created_at: unknown;
+    }>`
+      select id, from_user, body, kind, created_at
+      from vela_messages
+      where pair_a = ${pairA} and pair_b = ${pairB}
+      order by created_at asc
+    `;
     const messages: Message[] = messageRows
-      .filter((message) => message.pair_a === pairA && message.pair_b === pairB)
       .map((message) => ({
         id: message.id,
         from: message.from_user === userId ? ("me" as const) : ("them" as const),

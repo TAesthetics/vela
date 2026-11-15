@@ -37,10 +37,19 @@ describe("veil", () => {
     assert.ok(!/prompts, photo, plus/.test(swipe), "swipe target must not load photo");
     // Matches are the only place other portraits leave the DB — and only after
     // unveil: the match query itself never reads photos, unveiledPhoto() does.
-    const matches = apiSrc.slice(apiSrc.indexOf("const matchRows"), apiSrc.indexOf("const messageRows"));
+    const matches = apiSrc.slice(apiSrc.indexOf("const matchRows"), apiSrc.indexOf("const threads: Thread[]"));
     assert.ok(matches.includes("from vela_swipes mine"), "match query missing");
     assert.ok(!/\bp\.photo\b/.test(matches), "match query must not load photos before the unveil check");
     assert.equal(apiSrc.match(/unveiledPhoto\(/g)?.length, 2, "unveiledPhoto must have exactly one caller");
+  });
+
+  it("loads chat messages per active match through the pair index", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const snap = apiSrc.slice(apiSrc.indexOf("async function snapshot("), apiSrc.indexOf("function cleanProfile("));
+    assert.ok(snap.includes("where pair_a = ${pairA} and pair_b = ${pairB}"), "per-pair message query missing");
+    // "pair_a = me or pair_b = me" can't use vela_messages_pair_idx for the
+    // pair_b side and would load blocked/suspended conversations on every poll.
+    assert.ok(!/pair_b = \$\{userId\}/.test(snap), "snapshot must not scan all of a person's messages");
   });
 });
 
