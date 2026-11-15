@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { swipeCapHit, SWIPE_CAPS, isUnveiled, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
-import { isObjectionable, normalizeForFilter } from "./content-filter.ts";
+import { isObjectionable, normalizeForFilter, stripInvisible } from "./content-filter.ts";
 import { checkoutDecision } from "./checkout-reuse.ts";
 
 describe("veil", () => {
@@ -98,6 +98,29 @@ describe("word filter", () => {
   it("blocks listed words and phrases in their disguised forms", () => {
     for (const text of ["Du Hure", "h u r e", "SCHLAAAMPE", "fick dich", "F1ck dich!", "kys", "send nudes pls", "Hurensöhne"]) {
       assert.equal(isObjectionable(text), true, text);
+    }
+  });
+
+  it("is not fooled by invisible characters", () => {
+    for (const text of ["hu\u200Bre", "Du Hu\u00ADre", "fick\u2060 dich", "\uFEFFschlampe", "hu\u200Dre", "hu\u202Ere"]) {
+      assert.equal(isObjectionable(text), true, JSON.stringify(text));
+    }
+  });
+
+  it("strips invisible and control characters from stored text but keeps emoji intact", () => {
+    assert.equal(stripInvisible("Le\u200Bna\u00AD"), "Lena");
+    assert.equal(stripInvisible("\u202Eanel"), "anel");
+    assert.equal(stripInvisible("hi\u0000\u0007 du\nwie geht's?\t"), "hi du\nwie geht's?\t");
+    const family = "\u{1F469}\u200D\u2764\uFE0F\u200D\u{1F468}";
+    assert.equal(stripInvisible(family), family);
+    const scotland = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}";
+    assert.equal(stripInvisible(scotland), scotland);
+  });
+
+  it("is applied to everything people write", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    for (const field of ["raw.name", "raw.city", "row.a", "data?.note", "data?.text", "data?.details"]) {
+      assert.ok(apiSrc.includes(`stripInvisible(String(${field} ?? ""))`), field);
     }
   });
 

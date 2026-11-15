@@ -23,9 +23,29 @@ const TERMS = [
 
 const LEET: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", $: "s" };
 
+// Invisible format characters (zero-width space/joiner, soft hyphen, BOM,
+// bidi overrides like U+202E, Unicode tag characters, ...): Unicode "Cf".
+const FORMAT_CHARS = /\p{Cf}/gu;
+// Control characters except line break and tab.
+const CONTROL_CHARS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
+
+/**
+ * Removes control characters and invisible format characters from text people
+ * write (names, profile sentences, notes, messages, report details). They can
+ * hide words from the filter ("hu\u200Bre") or flip how a name is shown
+ * (U+202E). The zero-width joiner and tag characters stay, because emoji
+ * sequences (👩‍❤️‍👨, regional flags) need them.
+ */
+export function stripInvisible(text: string): string {
+  return text
+    .replace(CONTROL_CHARS, "")
+    .replace(FORMAT_CHARS, (ch) => (ch === "\u200D" || /[\u{E0020}-\u{E007F}]/u.test(ch) ? ch : ""));
+}
+
 /** Lowercase, map leetspeak, strip accents (keeping umlauts), squeeze runs of 3+ letters. */
 export function normalizeForFilter(text: string): string {
-  const lower = text.toLowerCase().replace(/ß/g, "ss");
+  // Every invisible character goes before matching, joiners included.
+  const lower = text.replace(FORMAT_CHARS, "").replace(CONTROL_CHARS, " ").toLowerCase().replace(/ß/g, "ss");
   let out = "";
   for (const ch of lower) out += LEET[ch] ?? ch;
   return out

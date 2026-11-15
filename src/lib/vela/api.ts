@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { FILTER_MESSAGE, isObjectionable } from "./content-filter";
+import { FILTER_MESSAGE, isObjectionable, stripInvisible } from "./content-filter";
 import { cleanJpegDataUrl, stripJpegMetadata } from "./jpeg";
 import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
@@ -425,8 +425,8 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
 function cleanProfile(input: unknown): { me: Me } | { error: string } {
   if (!input || typeof input !== "object") return { error: "Das Profil ist unvollständig." };
   const raw = input as Partial<Me>;
-  const name = String(raw.name ?? "").trim().replace(/\s+/g, " ");
-  const city = String(raw.city ?? "").trim().replace(/\s+/g, " ");
+  const name = stripInvisible(String(raw.name ?? "")).trim().replace(/\s+/g, " ");
+  const city = stripInvisible(String(raw.city ?? "")).trim().replace(/\s+/g, " ");
   const age = Number(raw.age);
   const orbit = String(raw.orbit ?? "");
   if (name.length < 2 || name.length > 32) return { error: "Wie sollen wir dich nennen?" };
@@ -446,7 +446,7 @@ function cleanProfile(input: unknown): { me: Me } | { error: string } {
     const row = prompt as Partial<Prompt>;
     const id = String(row.id ?? "");
     const q = String(row.q ?? "");
-    const a = String(row.a ?? "").trim().replace(/\s+/g, " ");
+    const a = stripInvisible(String(row.a ?? "")).trim().replace(/\s+/g, " ");
     if (!/^[a-z0-9-]{1,40}$/.test(id)) return { error: "Die Sätze sind unvollständig." };
     if (!QUESTIONS.has(q)) return { error: "Wähl eine der Fragen." };
     if (a.length < 8 || a.length > 280) return { error: "Zwei echte Sätze. Mindestens ein paar Worte." };
@@ -573,7 +573,7 @@ export const swipe = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
     const direction = data?.direction === "spark" ? "spark" : data?.direction === "pass" ? "pass" : "";
-    const note = String(data?.note ?? "").trim().slice(0, 240);
+    const note = stripInvisible(String(data?.note ?? "")).trim().slice(0, 240);
     const promptId = String(data?.promptId ?? "");
     if (direction === "spark" && note && isObjectionable(note)) {
       const sql = await getSql();
@@ -729,7 +729,7 @@ export const sendMessage = createServerFn({ method: "POST" })
   .validator((input: { toUser?: string; text?: string }) => input)
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
-    const text = String(data?.text ?? "").trim().slice(0, 500);
+    const text = stripInvisible(String(data?.text ?? "")).trim().slice(0, 500);
     const sql = await getSql();
     if (!toUser || !text || toUser === context.userId) {
       return { error: "Leer.", snapshot: await snapshot(sql, context.userId) };
@@ -922,7 +922,7 @@ export const reportUser = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
     const reason = String(data?.reason ?? "");
-    const details = String(data?.details ?? "").trim().slice(0, 1000);
+    const details = stripInvisible(String(data?.details ?? "")).trim().slice(0, 1000);
     const sql = await getSql();
     if (!toUser || toUser === context.userId || !(await userExists(sql, toUser))) {
       return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
