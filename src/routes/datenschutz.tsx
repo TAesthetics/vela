@@ -161,7 +161,7 @@ function Datenschutz() {
           dein Konto während einer offenen Alterssperre oder einer Sperre wegen Regelverstoß, behalten wir zusätzlich nur einen nicht umkehrbaren
           Prüfwert (Hash) deiner Anmeldekennung, höchstens 12 Monate lang, damit die Sperre nicht durch eine neue
           Anmeldung umgangen werden kann; Name, E-Mail-Adresse und Profildaten sind darin nicht enthalten.
-          Abo-Daten und Rechnungen bei Vela+ siehe Punkt 8. Server-Protokolle des Hosters werden nach kurzer Zeit automatisch gelöscht.
+          Abo-Daten und Rechnungen bei Vela+ siehe Punkt 8. Zähler zum Schutz vor Missbrauch (z. B. Anmeldeversuche pro IP-Adresse) löschen wir spätestens 2 Tage nach dem letzten Versuch, abgelaufene Sitzungen 1 Tag nach Ablauf. Server-Protokolle des Hosters werden nach kurzer Zeit automatisch gelöscht.
         </p>
       </Section>
 

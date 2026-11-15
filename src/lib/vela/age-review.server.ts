@@ -92,6 +92,10 @@ export async function purgeExpiredThrottled(sql: Sql): Promise<boolean> {
  *  - Remembered identities of accounts deleted while suspended: 12 months.
  *  - Age-review log and decided ID checks: 12 months, unless the person is
  *    still suspended (an open suspension keeps its history).
+ *  - Abuse counters ("rateLimit", incl. Better Auth's IP-keyed ones): 2 days
+ *    after the last hit (longest window is 24 h, so no limit is cut short).
+ *  - Expired login sessions (they carry IP + user agent) and expired one-time
+ *    tokens ("verification", e.g. the native-app handoff): 1 day after expiry.
  */
 export async function purgeExpired(sql: Sql) {
   await purgeOldIdImages(sql);
@@ -100,6 +104,7 @@ export async function purgeExpired(sql: Sql) {
   // Reset links: valid 24 h, kept at most 7 days after that.
   await sql`delete from vela_password_resets where created_at < now() - interval '8 days'`;
   await sql`delete from vela_reports where created_at < now() - interval '12 months'`;
+  await purgeStaleAuthRows(sql);
   await sql`delete from vela_deleted_identities where created_at < now() - interval '12 months'`;
   await sql`
     delete from vela_age_flags f
@@ -124,6 +129,15 @@ export async function purgeExpired(sql: Sql) {
         select 1 from vela_profiles p where p.user_id = c.user_id and p.status <> 'active'
       )
   `;
+}
+
+/** Max window of any rate rule is 86400 s; keep counters twice that. */
+export const RATE_LIMIT_RETENTION_MS = 2 * 86_400_000;
+
+export async function purgeStaleAuthRows(sql: Sql, now = Date.now()) {
+  await sql`delete from "rateLimit" where "lastRequest" < ${now - RATE_LIMIT_RETENTION_MS}`;
+  await sql`delete from "session" where "expiresAt" < now() - interval '1 day'`;
+  await sql`delete from "verification" where "expiresAt" < now() - interval '1 day'`;
 }
 
 /**

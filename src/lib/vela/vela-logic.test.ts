@@ -266,6 +266,23 @@ describe("block and retention hardening", () => {
     assert.match(cronSrc, /purgeExpiredThrottled\(sql\)/);
   });
 
+  it("purges stale rate counters, expired sessions and one-time tokens", () => {
+    const ageSrc = readFileSync(new URL("./age-review.server.ts", import.meta.url), "utf8");
+    const purge = ageSrc.slice(ageSrc.indexOf("export async function purgeExpired("));
+    assert.match(purge.slice(0, purge.indexOf("\n}\n")), /purgeStaleAuthRows\(sql\)/);
+    assert.match(ageSrc, /delete from "rateLimit" where "lastRequest" </);
+    assert.match(ageSrc, /delete from "session" where "expiresAt" </);
+    assert.match(ageSrc, /delete from "verification" where "expiresAt" </);
+    // Never cut a live window short: retention must exceed every rule's window.
+    const m = ageSrc.match(/RATE_LIMIT_RETENTION_MS = (\d+) \* 86_400_000;/);
+    assert.ok(m);
+    const RATE_LIMIT_RETENTION_MS = Number(m[1]) * 86_400_000;
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const windows = [...apiSrc.matchAll(/windowSec: (\d+)/g)].map((m) => Number(m[1]));
+    assert.ok(windows.length > 0);
+    for (const w of windows) assert.ok(w * 1000 < RATE_LIMIT_RETENTION_MS);
+  });
+
   it("exposes a daily retention cron route that calls purgeExpired", () => {
     const cronSrc = readFileSync(new URL("../../routes/api/cron/retention.ts", import.meta.url), "utf8");
     assert.match(cronSrc, /createFileRoute\("\/api\/cron\/retention"\)/);
