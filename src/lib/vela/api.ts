@@ -310,10 +310,32 @@ function cleanKnownPhotos(input: unknown): KnownPhotos {
   return known;
 }
 
+/**
+ * Messages the client already holds per match, by person id (from syncVela):
+ * how many (n) and the id of the last one. Messages are only ever appended
+ * (they are deleted only with the whole conversation), so a poll can skip the
+ * first n - 1 and check that the next one is still `last` before trusting it.
+ */
+type KnownMessages = Record<string, { n: number; last: string }>;
+
+/** Accepts at most 200 well-formed "n:lastId" entries; anything else is ignored. */
+function cleanKnownMessages(input: unknown): KnownMessages {
+  const known: KnownMessages = {};
+  if (!input || typeof input !== "object" || Array.isArray(input)) return known;
+  for (const [id, value] of Object.entries(input as Record<string, unknown>).slice(0, 200)) {
+    if (id.length > 64 || typeof value !== "string") continue;
+    const match = /^([1-9][0-9]{0,6}):([A-Za-z0-9_-]{1,64})$/.exec(value);
+    if (match) known[id] = { n: Number(match[1]), last: match[2] };
+  }
+  return known;
+}
+
 type SnapshotOptions = {
   /** Background poll: leave out my own portrait (the client keeps it) and known match photos. */
   poll?: boolean;
   known?: KnownPhotos;
+  /** Background poll: send only messages after the ones the client already has. */
+  knownMessages?: KnownMessages;
 };
 
 async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {}): Promise<Snapshot> {
@@ -399,18 +421,41 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
     // pair_a, pair_b, created_at). Never "pair_a = me or pair_b = me": that
     // can't use the index for the pair_b side (full scan on every poll) and
     // would also load conversations with blocked or suspended people.
-    const messageRows = await sql<{
+    // On a poll where the client already holds n messages ending in `last`,
+    // only the messages after those are sent. The veil counts come from window
+    // functions over the whole conversation (computed before OFFSET), so they
+    // stay exact even when only the tail is returned.
+    const loadMessages = (offset: number) => sql<{
       id: string;
       from_user: string;
       body: string;
       kind: string;
       created_at: unknown;
+      mine_total: unknown;
+      their_total: unknown;
     }>`
-      select id, from_user, body, kind, created_at
+      select id, from_user, body, kind, created_at,
+        count(*) filter (where kind = 'message' and from_user = ${userId}) over () as mine_total,
+        count(*) filter (where kind = 'message' and from_user <> ${userId}) over () as their_total
       from vela_messages
       where pair_a = ${pairA} and pair_b = ${pairB}
-      order by created_at asc
+      order by created_at asc, id asc
+      offset ${offset}
     `;
+    const held = options.knownMessages?.[row.user_id];
+    let messagesFrom = 0;
+    let messageRows = held ? await loadMessages(held.n - 1) : [];
+    if (!held || messageRows[0]?.id !== held.last) {
+      // Nothing held, or the client's copy doesn't line up: send everything.
+      messageRows = await loadMessages(0);
+    } else {
+      messagesFrom = held.n;
+    }
+    // Every row carries the whole-conversation totals; with no messages at all
+    // both are zero.
+    const mineCount = Number(messageRows[0]?.mine_total ?? 0);
+    const theirCount = Number(messageRows[0]?.their_total ?? 0);
+    if (messagesFrom > 0) messageRows = messageRows.slice(1);
     const messages: Message[] = messageRows
       .map((message) => ({
         id: message.id,
@@ -423,9 +468,6 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
     // messages in this match. Spark notes never count. Enforced here, server-side:
     // this is the only place other people's photos are selected, and the photo
     // is not even loaded until both sides clear VEIL_AFTER.
-    const chat = messages.filter((message) => message.kind === "message");
-    const mineCount = chat.filter((message) => message.from === "me").length;
-    const theirCount = chat.filter((message) => message.from === "them").length;
     const unveiled = isUnveiled(mineCount, theirCount);
     const shown = unveiled ? await unveiledPhoto(sql, row.user_id, options.known?.[row.user_id]) : null;
     return {
@@ -436,6 +478,7 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
       mineCount,
       theirCount,
       messages,
+      messagesFrom,
     };
   })));
 
@@ -531,12 +574,17 @@ export const loadVela = createServerFn({ method: "GET" })
  */
 export const syncVela = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator((input: { known?: Record<string, string> } | undefined) => input)
+  .validator((input: { known?: Record<string, string>; held?: Record<string, string> } | undefined) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     // Polling: me.photo is left out (the client keeps its own portrait from the
-    // full load) and so is every match photo the client already has.
-    return snapshot(sql, context.userId, { poll: true, known: cleanKnownPhotos(data?.known) });
+    // full load), so is every match photo the client already has, and so are
+    // the chat messages it already holds (only new ones are sent).
+    return snapshot(sql, context.userId, {
+      poll: true,
+      known: cleanKnownPhotos(data?.known),
+      knownMessages: cleanKnownMessages(data?.held),
+    });
   });
 
 export const saveProfile = createServerFn({ method: "POST" })

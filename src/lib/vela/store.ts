@@ -14,7 +14,7 @@ import {
   syncVela,
   undoPass,
 } from "@/lib/vela/api";
-import { emptySnapshot, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
+import { emptySnapshot, mergeMessages, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
 export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip" | "filtered";
 
@@ -120,7 +120,13 @@ export const useVela = create<VelaStore>((set, get) => ({
     for (const thread of get().threads) {
       if (thread.photo && thread.photoKey) known[thread.person.id] = thread.photoKey;
     }
-    const snapshot = await syncVela({ data: { known } });
+    // ...and how many chat messages it already holds, so only new ones come back.
+    const held: Record<string, string> = {};
+    for (const thread of get().threads) {
+      const last = thread.messages[thread.messages.length - 1];
+      if (last) held[thread.person.id] = `${thread.messages.length}:${last.id}`;
+    }
+    const snapshot = await syncVela({ data: { known, held } });
     if (applied !== before) return;
     const previous = new Map(get().threads.map((thread) => [thread.person.id, thread]));
     set({
@@ -131,10 +137,13 @@ export const useVela = create<VelaStore>((set, get) => ({
       swipesLeft: snapshot.swipesLeft,
       inbound: snapshot.inbound,
       inboundCount: snapshot.inboundCount,
-      threads: snapshot.threads.map((thread) => {
-        if (thread.photo || !thread.photoKey) return thread;
-        const old = previous.get(thread.person.id);
-        return old?.photo && old.photoKey === thread.photoKey ? { ...thread, photo: old.photo } : thread;
+      threads: snapshot.threads.map((incoming) => {
+        const old = previous.get(incoming.person.id);
+        let thread = mergeMessages(incoming, old);
+        if (!thread.photo && thread.photoKey && old?.photo && old.photoKey === thread.photoKey) {
+          thread = { ...thread, photo: old.photo };
+        }
+        return thread;
       }),
     });
   },

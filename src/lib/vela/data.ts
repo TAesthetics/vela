@@ -46,6 +46,12 @@ export type Thread = {
   mineCount: number;
   theirCount: number;
   messages: Message[];
+  /**
+   * Index of messages[0] in the whole conversation. 0 = complete list; on a
+   * background poll > 0 means "only the messages after the first messagesFrom
+   * ones you already have".
+   */
+  messagesFrom?: number;
 };
 
 export type IdCheckStatus = "none" | "pending" | "approved" | "rejected" | "expired";
@@ -217,4 +223,17 @@ export function emptySnapshot(): Snapshot {
     inboundCount: 0,
     threads: [],
   };
+}
+
+/**
+ * A poll may send only the tail of a conversation (messagesFrom > 0): put the
+ * messages the client already had in front of it. If the local copy is shorter
+ * than promised (shouldn't happen), keep the local copy for now; the next
+ * poll asks again from what we really have.
+ */
+export function mergeMessages(incoming: Thread, old: Thread | undefined): Thread {
+  const from = incoming.messagesFrom ?? 0;
+  if (from <= 0) return incoming;
+  if (!old || old.messages.length < from) return { ...incoming, messages: old?.messages ?? incoming.messages, messagesFrom: 0 };
+  return { ...incoming, messages: [...old.messages.slice(0, from), ...incoming.messages], messagesFrom: 0 };
 }

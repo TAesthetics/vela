@@ -3,7 +3,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { swipeCapHit, SWIPE_CAPS, isUnveiled, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
+import { swipeCapHit, SWIPE_CAPS, isUnveiled, mergeMessages, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
 import { isObjectionable, normalizeForFilter, stripInvisible } from "./content-filter.ts";
 import { checkoutDecision } from "./checkout-reuse.ts";
 
@@ -415,5 +415,37 @@ describe("ban plus age suspension survive deletion", () => {
     const carry = ageSrc.slice(ageSrc.indexOf("export async function carryOverSuspension"));
     assert.ok(carry.indexOf('"suspended"') > 0 && carry.indexOf('"suspended"') < carry.indexOf('return "ban"'));
     assert.match(ageSrc, /then 'ban_age' else 'ban' end/);
+  });
+});
+
+describe("chat polling sends only new messages", () => {
+  const msg = (id: string) => ({ id, from: "me" as const, kind: "message" as const, text: id, at: "" });
+  const thread = (ids: string[], messagesFrom?: number) =>
+    ({ person: { id: "p" }, photo: null, photoKey: null, unveiled: false, mineCount: 0, theirCount: 0, messages: ids.map(msg), messagesFrom }) as never;
+
+  it("appends the tail to the messages the client already had", () => {
+    const merged = mergeMessages(thread(["c", "d"], 2), thread(["a", "b"]));
+    assert.deepEqual(merged.messages.map((m) => m.id), ["a", "b", "c", "d"]);
+    assert.equal(merged.messagesFrom, 0);
+    const none = mergeMessages(thread([], 2), thread(["a", "b"]));
+    assert.deepEqual(none.messages.map((m) => m.id), ["a", "b"]);
+  });
+
+  it("takes a full list as is and never builds a chat with a gap", () => {
+    assert.deepEqual(mergeMessages(thread(["a"], 0), thread(["x", "y"])).messages.map((m) => m.id), ["a"]);
+    const short = mergeMessages(thread(["d"], 3), thread(["a"]));
+    assert.deepEqual(short.messages.map((m) => m.id), ["a"]);
+  });
+
+  it("server trusts the client's copy only when it lines up and counts the veil over the whole chat", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const snap = apiSrc.slice(apiSrc.indexOf("async function snapshot("), apiSrc.indexOf("function cleanProfile("));
+    assert.ok(snap.includes("order by created_at asc, id asc"), "message order must be deterministic");
+    assert.ok(snap.includes("messageRows[0]?.id !== held.last"), "tail only after the held last message is confirmed");
+    assert.ok(/over \(\) as mine_total/.test(snap) && /over \(\) as their_total/.test(snap), "veil counts from window totals");
+    const sync = apiSrc.slice(apiSrc.indexOf("export const syncVela"), apiSrc.indexOf("export const saveProfile"));
+    assert.ok(sync.includes("knownMessages: cleanKnownMessages(data?.held)"));
+    const load = apiSrc.slice(apiSrc.indexOf("export const loadVela"), apiSrc.indexOf("export const syncVela"));
+    assert.ok(!load.includes("knownMessages"), "full loads always send whole chats");
   });
 });
