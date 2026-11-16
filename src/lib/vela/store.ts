@@ -114,8 +114,15 @@ export const useVela = create<VelaStore>((set, get) => ({
   sync: async () => {
     if (!get().ready) return;
     const before = applied;
-    const snapshot = await syncVela();
+    // Tell the server which match photos are already on screen, so polling
+    // only resends a photo when it is new or changed.
+    const known: Record<string, string> = {};
+    for (const thread of get().threads) {
+      if (thread.photo && thread.photoKey) known[thread.person.id] = thread.photoKey;
+    }
+    const snapshot = await syncVela({ data: { known } });
     if (applied !== before) return;
+    const previous = new Map(get().threads.map((thread) => [thread.person.id, thread]));
     set({
       suspension: snapshot.suspension,
       plus: snapshot.plus,
@@ -124,7 +131,11 @@ export const useVela = create<VelaStore>((set, get) => ({
       swipesLeft: snapshot.swipesLeft,
       inbound: snapshot.inbound,
       inboundCount: snapshot.inboundCount,
-      threads: snapshot.threads,
+      threads: snapshot.threads.map((thread) => {
+        if (thread.photo || !thread.photoKey) return thread;
+        const old = previous.get(thread.person.id);
+        return old?.photo && old.photoKey === thread.photoKey ? { ...thread, photo: old.photo } : thread;
+      }),
     });
   },
   save: async (me) => {

@@ -278,18 +278,50 @@ async function suspensionSnapshot(sql: Sql, userId: string, profileStatus: strin
   };
 }
 
-/** Photo of a match whose veil has lifted; callers check isUnveiled first. */
-async function unveiledPhoto(sql: Sql, userId: string): Promise<string | null> {
-  const rows = await sql<{ photo: string | null }>`
-    select photo from vela_profiles where user_id = ${userId} and status = 'active'
+/**
+ * Photo of a match whose veil has lifted; callers check isUnveiled first.
+ * `key` is an md5 fingerprint of the portrait. When the client already shows
+ * the photo with that fingerprint (knownKey), the photo itself is left out, so
+ * chat polling doesn't resend up to ~120 KB per unveiled match every 8 s.
+ */
+async function unveiledPhoto(
+  sql: Sql,
+  userId: string,
+  knownKey = "",
+): Promise<{ photo: string | null; key: string | null }> {
+  const rows = await sql<{ photo: string | null; key: string | null }>`
+    select md5(photo) as key,
+      case when md5(photo) = ${knownKey} then null else photo end as photo
+    from vela_profiles where user_id = ${userId} and status = 'active'
   `;
-  return rows[0]?.photo ?? null;
+  return { photo: rows[0]?.photo ?? null, key: rows[0]?.key ?? null };
 }
 
-async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
+/** Photo fingerprints the client already has, by person id (from syncVela). */
+type KnownPhotos = Record<string, string>;
+
+/** Accepts at most 200 well-formed entries; anything else is ignored. */
+function cleanKnownPhotos(input: unknown): KnownPhotos {
+  const known: KnownPhotos = {};
+  if (!input || typeof input !== "object" || Array.isArray(input)) return known;
+  for (const [id, key] of Object.entries(input as Record<string, unknown>).slice(0, 200)) {
+    if (id.length <= 64 && typeof key === "string" && /^[0-9a-f]{32}$/.test(key)) known[id] = key;
+  }
+  return known;
+}
+
+type SnapshotOptions = {
+  /** Background poll: leave out my own portrait (the client keeps it) and known match photos. */
+  poll?: boolean;
+  known?: KnownPhotos;
+};
+
+async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {}): Promise<Snapshot> {
   const day = berlinDay();
   const mine = await sql<ProfileRow>`
-    select user_id, name, age, city, orbit, values, prompts, photo, plus, status, adult_confirmed_at
+    select user_id, name, age, city, orbit, values, prompts,
+      case when ${options.poll ? "1" : "0"} = '1' then null else photo end as photo,
+      plus, status, adult_confirmed_at
     from vela_profiles where user_id = ${userId}
   `;
   const meRow = mine[0];
@@ -395,10 +427,11 @@ async function snapshot(sql: Sql, userId: string): Promise<Snapshot> {
     const mineCount = chat.filter((message) => message.from === "me").length;
     const theirCount = chat.filter((message) => message.from === "them").length;
     const unveiled = isUnveiled(mineCount, theirCount);
-    const photo = unveiled ? await unveiledPhoto(sql, row.user_id) : null;
+    const shown = unveiled ? await unveiledPhoto(sql, row.user_id, options.known?.[row.user_id]) : null;
     return {
       person: toPerson(row, true),
-      photo,
+      photo: shown?.photo ?? null,
+      photoKey: shown?.key ?? null,
       unveiled,
       mineCount,
       theirCount,
@@ -498,9 +531,12 @@ export const loadVela = createServerFn({ method: "GET" })
  */
 export const syncVela = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
+  .validator((input: { known?: Record<string, string> } | undefined) => input)
+  .handler(async ({ context, data }) => {
     const sql = await getSql();
-    return snapshot(sql, context.userId);
+    // Polling: me.photo is left out (the client keeps its own portrait from the
+    // full load) and so is every match photo the client already has.
+    return snapshot(sql, context.userId, { poll: true, known: cleanKnownPhotos(data?.known) });
   });
 
 export const saveProfile = createServerFn({ method: "POST" })

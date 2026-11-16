@@ -24,7 +24,23 @@ describe("veil", () => {
     const person = dataSrc.slice(dataSrc.indexOf("export type Person"), dataSrc.indexOf("export type Message"));
     assert.ok(!/photo/.test(person), "Person (deck/inbound cards) must not carry a photo");
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
-    assert.match(apiSrc, /const photo = unveiled \? await unveiledPhoto\(sql, row\.user_id\) : null;/);
+    assert.match(
+      apiSrc,
+      /const shown = unveiled \? await unveiledPhoto\(sql, row\.user_id, options\.known\?\.\[row\.user_id\]\) : null;/,
+    );
+  });
+
+  it("polling resends only new or changed match photos and never my own", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const fn = apiSrc.slice(apiSrc.indexOf("async function unveiledPhoto("), apiSrc.indexOf("type KnownPhotos"));
+    assert.ok(fn.includes("case when md5(photo) = ${knownKey} then null else photo end"), "known photo must be skipped");
+    const sync = apiSrc.slice(apiSrc.indexOf("export const syncVela"), apiSrc.indexOf("export const saveProfile"));
+    assert.ok(sync.includes("poll: true"), "syncVela must run the snapshot in poll mode");
+    assert.ok(sync.includes("cleanKnownPhotos(data?.known)"), "client fingerprints must be validated");
+    const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+    const merge = storeSrc.slice(storeSrc.indexOf("  sync: async"), storeSrc.indexOf("  save: async"));
+    assert.ok(merge.includes("old.photoKey === thread.photoKey"), "client must keep its photo only when unchanged");
+    assert.ok(!/\bme:/.test(merge), "sync must not overwrite my profile (poll leaves my photo out)");
   });
 
   it("does not SELECT other people's photos for the deck or swipe target", () => {

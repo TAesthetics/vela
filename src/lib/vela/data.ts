@@ -37,7 +37,10 @@ export type Message = {
 
 export type Thread = {
   person: Person;
+  /** Null while veiled; on a background poll also null when unchanged (see photoKey). */
   photo: string | null;
+  /** md5 fingerprint of the unveiled photo, null while veiled or without photo. */
+  photoKey: string | null;
   unveiled: boolean;
   /** Chat messages (notes excluded) each side has sent in this match. */
   mineCount: number;
