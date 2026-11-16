@@ -39,7 +39,9 @@ describe("veil", () => {
     assert.ok(sync.includes("cleanKnownPhotos(data?.known)"), "client fingerprints must be validated");
     const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
     const merge = storeSrc.slice(storeSrc.indexOf("  sync: async"), storeSrc.indexOf("  save: async"));
-    assert.ok(merge.includes("old.photoKey === thread.photoKey"), "client must keep its photo only when unchanged");
+    assert.ok(merge.includes("mergeThreads(snapshot.threads, get().threads)"), "sync must merge with what the app has");
+    const helper = storeSrc.slice(storeSrc.indexOf("function mergeThreads("), storeSrc.indexOf("function apply("));
+    assert.ok(helper.includes("old.photoKey === thread.photoKey"), "client must keep its photo only when unchanged");
     assert.ok(!/\bme:/.test(merge), "sync must not overwrite my profile (poll leaves my photo out)");
   });
 
@@ -447,5 +449,17 @@ describe("chat polling sends only new messages", () => {
     assert.ok(sync.includes("knownMessages: cleanKnownMessages(data?.held)"));
     const load = apiSrc.slice(apiSrc.indexOf("export const loadVela"), apiSrc.indexOf("export const syncVela"));
     assert.ok(!load.includes("knownMessages"), "full loads always send whole chats");
+  });
+
+  it("sending a message answers light too and the app keeps its portrait", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const send = apiSrc.slice(apiSrc.indexOf("export const sendMessage"), apiSrc.indexOf("export const setPlus"));
+    assert.ok(send.includes("poll: true") && send.includes("cleanKnownPhotos(data?.known)") && send.includes("cleanKnownMessages(data?.held)"));
+    assert.ok(!send.includes("snapshot(sql, context.userId)"), "every answer of sendMessage must be the light one");
+    const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+    const sendClient = storeSrc.slice(storeSrc.indexOf("  send: async"), storeSrc.indexOf("  unlockPlus: async"));
+    assert.ok(sendClient.includes("...pollHints(get().threads)"));
+    assert.ok(sendClient.includes("photo: state.me.photo"), "my portrait must survive the light answer");
+    assert.ok(sendClient.includes("mergeThreads(result.snapshot.threads, state.threads)"));
   });
 });

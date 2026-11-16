@@ -810,19 +810,29 @@ export const undoPass = createServerFn({ method: "POST" })
 
 export const sendMessage = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { toUser?: string; text?: string }) => input)
+  .validator(
+    (input: { toUser?: string; text?: string; known?: Record<string, string>; held?: Record<string, string> }) => input,
+  )
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
     const text = stripInvisible(String(data?.text ?? "")).trim().slice(0, 500);
     const sql = await getSql();
+    // Answer like a poll: the app keeps its own portrait and sends what it
+    // already holds, so a sent message doesn't pull every unveiled photo again.
+    const reply = () =>
+      snapshot(sql, context.userId, {
+        poll: true,
+        known: cleanKnownPhotos(data?.known),
+        knownMessages: cleanKnownMessages(data?.held),
+      });
     if (!toUser || !text || toUser === context.userId) {
-      return { error: "Leer.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Leer.", snapshot: await reply() };
     }
     if (text.replace(/\s/g, "").length < 2) {
-      return { error: "Ein bisschen mehr, bitte.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Ein bisschen mehr, bitte.", snapshot: await reply() };
     }
     if (isObjectionable(text)) {
-      return { error: FILTER_MESSAGE, snapshot: await snapshot(sql, context.userId) };
+      return { error: FILTER_MESSAGE, snapshot: await reply() };
     }
     const mutual = await sql`
       select 1 from vela_swipes mine
@@ -835,10 +845,10 @@ export const sendMessage = createServerFn({ method: "POST" })
         and mine.direction = 'spark'
     `;
     if (mutual.length === 0) {
-      return { error: "Noch kein Gespräch.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Noch kein Gespräch.", snapshot: await reply() };
     }
     if (!(await canInteract(sql, context.userId, toUser))) {
-      return { error: "Dieses Gespräch ist beendet.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Dieses Gespräch ist beendet.", snapshot: await reply() };
     }
     // Limit checks, a duplicate check and the insert run in one transaction
     // under a per-sender advisory lock, so parallel requests can't overrun the
@@ -873,12 +883,12 @@ export const sendMessage = createServerFn({ method: "POST" })
       return "inserted";
     });
     if (outcome === "limited") {
-      return { error: "Kurz durchatmen. Gleich geht es weiter.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Kurz durchatmen. Gleich geht es weiter.", snapshot: await reply() };
     }
     if (outcome === "ended") {
-      return { error: "Dieses Gespräch ist beendet.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Dieses Gespräch ist beendet.", snapshot: await reply() };
     }
-    return { error: null, snapshot: await snapshot(sql, context.userId) };
+    return { error: null, snapshot: await reply() };
   });
 
 export const setPlus = createServerFn({ method: "POST" })

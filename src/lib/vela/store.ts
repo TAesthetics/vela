@@ -78,6 +78,35 @@ function readSeen() {
 /** Bumped on every full snapshot apply, so a slower background sync never overwrites newer state. */
 let applied = 0;
 
+/**
+ * What the app already shows, for a light server answer: fingerprints of the
+ * match photos on screen (only new or changed photos come back) and, per
+ * match, how many chat messages it holds and the last id (only newer ones).
+ */
+function pollHints(threads: Thread[]) {
+  const known: Record<string, string> = {};
+  const held: Record<string, string> = {};
+  for (const thread of threads) {
+    if (thread.photo && thread.photoKey) known[thread.person.id] = thread.photoKey;
+    const last = thread.messages[thread.messages.length - 1];
+    if (last) held[thread.person.id] = `${thread.messages.length}:${last.id}`;
+  }
+  return { known, held };
+}
+
+/** Puts a light answer together with what the app already had (see pollHints). */
+function mergeThreads(incoming: Thread[], current: Thread[]): Thread[] {
+  const previous = new Map(current.map((thread) => [thread.person.id, thread]));
+  return incoming.map((next) => {
+    const old = previous.get(next.person.id);
+    let thread = mergeMessages(next, old);
+    if (!thread.photo && thread.photoKey && old?.photo && old.photoKey === thread.photoKey) {
+      thread = { ...thread, photo: old.photo };
+    }
+    return thread;
+  });
+}
+
 function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
   applied += 1;
   return {
@@ -114,21 +143,9 @@ export const useVela = create<VelaStore>((set, get) => ({
   sync: async () => {
     if (!get().ready) return;
     const before = applied;
-    // Tell the server which match photos are already on screen, so polling
-    // only resends a photo when it is new or changed.
-    const known: Record<string, string> = {};
-    for (const thread of get().threads) {
-      if (thread.photo && thread.photoKey) known[thread.person.id] = thread.photoKey;
-    }
-    // ...and how many chat messages it already holds, so only new ones come back.
-    const held: Record<string, string> = {};
-    for (const thread of get().threads) {
-      const last = thread.messages[thread.messages.length - 1];
-      if (last) held[thread.person.id] = `${thread.messages.length}:${last.id}`;
-    }
+    const { known, held } = pollHints(get().threads);
     const snapshot = await syncVela({ data: { known, held } });
     if (applied !== before) return;
-    const previous = new Map(get().threads.map((thread) => [thread.person.id, thread]));
     set({
       suspension: snapshot.suspension,
       plus: snapshot.plus,
@@ -137,14 +154,7 @@ export const useVela = create<VelaStore>((set, get) => ({
       swipesLeft: snapshot.swipesLeft,
       inbound: snapshot.inbound,
       inboundCount: snapshot.inboundCount,
-      threads: snapshot.threads.map((incoming) => {
-        const old = previous.get(incoming.person.id);
-        let thread = mergeMessages(incoming, old);
-        if (!thread.photo && thread.photoKey && old?.photo && old.photoKey === thread.photoKey) {
-          thread = { ...thread, photo: old.photo };
-        }
-        return thread;
-      }),
+      threads: mergeThreads(snapshot.threads, get().threads),
     });
   },
   save: async (me) => {
@@ -184,8 +194,12 @@ export const useVela = create<VelaStore>((set, get) => ({
     return result.status;
   },
   send: async (personId, text) => {
-    const result = await sendMessage({ data: { toUser: personId, text } });
-    set(apply(result.snapshot, { toast: result.error }));
+    // Light answer like a poll: no own portrait, no photos or messages the app
+    // already has (sending used to return every unveiled photo each time).
+    const result = await sendMessage({ data: { toUser: personId, text, ...pollHints(get().threads) } });
+    const state = get();
+    const me = result.snapshot.me && !result.snapshot.me.photo && state.me ? { ...result.snapshot.me, photo: state.me.photo } : result.snapshot.me;
+    set(apply({ ...result.snapshot, me, threads: mergeThreads(result.snapshot.threads, state.threads) }, { toast: result.error }));
   },
   unlockPlus: async () => {
     const result = await setPlus();
