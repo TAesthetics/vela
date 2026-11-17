@@ -249,14 +249,14 @@ export const useVela = create<VelaStore>((set, get) => ({
     return result.error;
   },
   block: async (personId) => {
-    const result = await blockUser({ data: { toUser: personId } });
-    set(apply(result.snapshot, { toast: result.error ?? "Blockiert. Ihr seht euch nicht mehr." }));
+    const result = await blockUser({ data: { toUser: personId, ...pollHints(get().threads) } });
+    set(apply(keepKnown(result.snapshot, get()), { toast: result.error ?? "Blockiert. Ihr seht euch nicht mehr." }));
     return !result.error;
   },
   report: async (personId, reason, details) => {
-    const result = await reportUser({ data: { toUser: personId, reason, details } });
+    const result = await reportUser({ data: { toUser: personId, reason, details, ...pollHints(get().threads) } });
     set(
-      apply(result.snapshot, {
+      apply(keepKnown(result.snapshot, get()), {
         toast: result.error ?? "Danke. Gemeldet und blockiert.",
       }),
     );

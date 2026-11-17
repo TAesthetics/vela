@@ -1010,41 +1010,63 @@ async function userExists(sql: Sql, userId: string): Promise<boolean> {
 
 export const blockUser = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { toUser?: string }) => input)
+  .validator((input: { toUser?: string; known?: Record<string, string>; held?: Record<string, string> }) => input)
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
     const sql = await getSql();
+    // Light answer like a poll (see swipe): the app keeps what it already has.
+    const reply = () =>
+      snapshot(sql, context.userId, {
+        poll: true,
+        known: cleanKnownPhotos(data?.known),
+        knownMessages: cleanKnownMessages(data?.held),
+      });
     if (!toUser || toUser === context.userId) {
-      return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Das geht nicht.", snapshot: await reply() };
     }
     // Soft cap against scripts flooding vela_blocks (shared rateLimit table).
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
     if (!(await consumeRateLimit(sql, `vela:block:${context.userId}`, BLOCK_RULE))) {
       return {
         error: "Zu viele Blockierungen gerade. Versuch es gleich noch einmal.",
-        snapshot: await snapshot(sql, context.userId),
+        snapshot: await reply(),
       };
     }
     if (!(await userExists(sql, toUser))) {
-      return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Das geht nicht.", snapshot: await reply() };
     }
     await insertBlock(sql, context.userId, toUser);
-    return { error: null, snapshot: await snapshot(sql, context.userId) };
+    return { error: null, snapshot: await reply() };
   });
 
 export const reportUser = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { toUser?: string; reason?: string; details?: string }) => input)
+  .validator(
+    (input: {
+      toUser?: string;
+      reason?: string;
+      details?: string;
+      known?: Record<string, string>;
+      held?: Record<string, string>;
+    }) => input,
+  )
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
     const reason = String(data?.reason ?? "");
     const details = stripInvisible(String(data?.details ?? "")).trim().slice(0, 1000);
     const sql = await getSql();
+    // Light answer like a poll (see swipe): the app keeps what it already has.
+    const reply = () =>
+      snapshot(sql, context.userId, {
+        poll: true,
+        known: cleanKnownPhotos(data?.known),
+        knownMessages: cleanKnownMessages(data?.held),
+      });
     if (!toUser || toUser === context.userId || !(await userExists(sql, toUser))) {
-      return { error: "Das geht nicht.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Das geht nicht.", snapshot: await reply() };
     }
     if (!REASON_IDS.has(reason)) {
-      return { error: "Wähl einen Grund.", snapshot: await snapshot(sql, context.userId) };
+      return { error: "Wähl einen Grund.", snapshot: await reply() };
     }
     // One report per person is enough (it already blocks), and a daily cap
     // keeps mass false reports from flooding the operator's review queue.
@@ -1086,10 +1108,10 @@ export const reportUser = createServerFn({ method: "POST" })
       // Still blocked (above), so the person is out of sight; just no new report row.
       return {
         error: "Du hast heute schon viele Meldungen geschickt. Die Person ist blockiert, wir schauen uns die bisherigen an.",
-        snapshot: await snapshot(sql, context.userId),
+        snapshot: await reply(),
       };
     }
-    return { error: null, snapshot: await snapshot(sql, context.userId) };
+    return { error: null, snapshot: await reply() };
   });
 
 export const deleteProfile = createServerFn({ method: "POST" })

@@ -464,11 +464,13 @@ describe("chat polling sends only new messages", () => {
     assert.ok(keep.includes("photo: state.me.photo") && keep.includes("mergeThreads(snapshot.threads, state.threads)"));
   });
 
-  it("swipes and undo answer light too, with the full deck", () => {
+  it("swipes, undo, block and report answer light too, with the full deck", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     for (const [from, to] of [
       ["export const swipe", "export const undoPass"],
       ["export const undoPass", "export const sendMessage"],
+      ["export const blockUser", "export const reportUser"],
+      ["export const reportUser", "export const deleteProfile"],
     ]) {
       const handler = apiSrc.slice(apiSrc.indexOf(from), apiSrc.indexOf(to));
       assert.ok(handler.includes("poll: true") && handler.includes("cleanKnownPhotos(data?.known)") && handler.includes("cleanKnownMessages(data?.held)"), from);
@@ -481,6 +483,8 @@ describe("chat polling sends only new messages", () => {
       ["  pass: async", "  undo: async"],
       ["  undo: async", "  spark: async"],
       ["  spark: async", "  send: async"],
+      ["  block: async", "  report: async"],
+      ["  report: async", "  removeProfile: async"],
     ]) {
       const client = storeSrc.slice(storeSrc.indexOf(from), storeSrc.indexOf(to));
       assert.ok(client.includes("pollHints(get().threads)"), from);
