@@ -459,7 +459,32 @@ describe("chat polling sends only new messages", () => {
     const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
     const sendClient = storeSrc.slice(storeSrc.indexOf("  send: async"), storeSrc.indexOf("  unlockPlus: async"));
     assert.ok(sendClient.includes("...pollHints(get().threads)"));
-    assert.ok(sendClient.includes("photo: state.me.photo"), "my portrait must survive the light answer");
-    assert.ok(sendClient.includes("mergeThreads(result.snapshot.threads, state.threads)"));
+    assert.ok(sendClient.includes("keepKnown(result.snapshot, get())"), "my portrait and held chats must survive the light answer");
+    const keep = storeSrc.slice(storeSrc.indexOf("function keepKnown("), storeSrc.indexOf("function apply("));
+    assert.ok(keep.includes("photo: state.me.photo") && keep.includes("mergeThreads(snapshot.threads, state.threads)"));
+  });
+
+  it("swipes and undo answer light too, with the full deck", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    for (const [from, to] of [
+      ["export const swipe", "export const undoPass"],
+      ["export const undoPass", "export const sendMessage"],
+    ]) {
+      const handler = apiSrc.slice(apiSrc.indexOf(from), apiSrc.indexOf(to));
+      assert.ok(handler.includes("poll: true") && handler.includes("cleanKnownPhotos(data?.known)") && handler.includes("cleanKnownMessages(data?.held)"), from);
+      assert.ok(!handler.includes("snapshot(sql, context.userId)"), `${from}: every answer must be the light one`);
+    }
+    const snap = apiSrc.slice(apiSrc.indexOf("async function snapshot("), apiSrc.indexOf("function cleanProfile("));
+    assert.ok(snap.includes("deck: deckRows.map("), "the deck is never shortened by poll mode");
+    const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+    for (const [from, to] of [
+      ["  pass: async", "  undo: async"],
+      ["  undo: async", "  spark: async"],
+      ["  spark: async", "  send: async"],
+    ]) {
+      const client = storeSrc.slice(storeSrc.indexOf(from), storeSrc.indexOf(to));
+      assert.ok(client.includes("pollHints(get().threads)"), from);
+      assert.ok(client.includes("keepKnown(result.snapshot, get())"), from);
+    }
   });
 });

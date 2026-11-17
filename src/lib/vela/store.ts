@@ -107,6 +107,15 @@ function mergeThreads(incoming: Thread[], current: Thread[]): Thread[] {
   });
 }
 
+/**
+ * Fills a light answer (swipe, undo, send) back up with what the app already
+ * shows: my own portrait and the photos/messages it held (see pollHints).
+ */
+function keepKnown(snapshot: Snapshot, state: Pick<VelaStore, "me" | "threads">): Snapshot {
+  const me = snapshot.me && !snapshot.me.photo && state.me ? { ...snapshot.me, photo: state.me.photo } : snapshot.me;
+  return { ...snapshot, me, threads: mergeThreads(snapshot.threads, state.threads) };
+}
+
 function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
   applied += 1;
   return {
@@ -164,21 +173,21 @@ export const useVela = create<VelaStore>((set, get) => ({
     return null;
   },
   pass: async (id) => {
-    const result = await swipe({ data: { toUser: id, direction: "pass" } });
-    set(apply(result.snapshot, { frontId: null }));
+    const result = await swipe({ data: { toUser: id, direction: "pass", ...pollHints(get().threads) } });
+    set(apply(keepKnown(result.snapshot, get()), { frontId: null }));
     return result.status;
   },
   undo: async () => {
-    const result = await undoPass();
-    set(apply(result.snapshot, { frontId: result.id }));
+    const result = await undoPass({ data: pollHints(get().threads) });
+    set(apply(keepKnown(result.snapshot, get()), { frontId: result.id }));
     return result.ok;
   },
   spark: async (personId, promptId, note) => {
-    const result = await swipe({ data: { toUser: personId, direction: "spark", promptId, note } });
+    const result = await swipe({ data: { toUser: personId, direction: "spark", promptId, note, ...pollHints(get().threads) } });
     const person = result.snapshot.threads.find((thread) => thread.person.id === personId)?.person;
     if (result.status === "match") void import("@/lib/native").then(({ nativeHaptic }) => nativeHaptic("match"));
     set(
-      apply(result.snapshot, {
+      apply(keepKnown(result.snapshot, get()), {
         frontId: null,
         celebrate: result.status === "match" && person ? person : get().celebrate,
         toast:
@@ -197,9 +206,7 @@ export const useVela = create<VelaStore>((set, get) => ({
     // Light answer like a poll: no own portrait, no photos or messages the app
     // already has (sending used to return every unveiled photo each time).
     const result = await sendMessage({ data: { toUser: personId, text, ...pollHints(get().threads) } });
-    const state = get();
-    const me = result.snapshot.me && !result.snapshot.me.photo && state.me ? { ...result.snapshot.me, photo: state.me.photo } : result.snapshot.me;
-    set(apply({ ...result.snapshot, me, threads: mergeThreads(result.snapshot.threads, state.threads) }, { toast: result.error }));
+    set(apply(keepKnown(result.snapshot, get()), { toast: result.error }));
   },
   unlockPlus: async () => {
     const result = await setPlus();

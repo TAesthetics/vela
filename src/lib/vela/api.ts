@@ -653,35 +653,50 @@ export const saveProfile = createServerFn({ method: "POST" })
 
 export const swipe = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { toUser?: string; direction?: string; promptId?: string; note?: string }) => input)
+  .validator(
+    (input: {
+      toUser?: string;
+      direction?: string;
+      promptId?: string;
+      note?: string;
+      known?: Record<string, string>;
+      held?: Record<string, string>;
+    }) => input,
+  )
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
     const direction = data?.direction === "spark" ? "spark" : data?.direction === "pass" ? "pass" : "";
     const note = stripInvisible(String(data?.note ?? "")).trim().slice(0, 240);
     const promptId = String(data?.promptId ?? "");
+    const sql = await getSql();
+    // Answer like a poll (deck stays complete): the app keeps its own portrait
+    // and the photos/messages it already holds, so a swipe stays small.
+    const reply = () =>
+      snapshot(sql, context.userId, {
+        poll: true,
+        known: cleanKnownPhotos(data?.known),
+        knownMessages: cleanKnownMessages(data?.held),
+      });
     if (direction === "spark" && note && isObjectionable(note)) {
-      const sql = await getSql();
-      return { status: "filtered" as const, snapshot: await snapshot(sql, context.userId) };
+      return { status: "filtered" as const, snapshot: await reply() };
     }
     if (!toUser || toUser === context.userId || !direction) {
-      const sql = await getSql();
-      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+      return { status: "skip" as const, snapshot: await reply() };
     }
-    const sql = await getSql();
     const day = berlinDay();
     // Prompts only — never pull the portrait for a swipe (veil stays closed).
     const target = await sql<ProfileRow>`
       select user_id, name, age, city, orbit, values, prompts, plus
       from vela_profiles where user_id = ${toUser}
     `;
-    if (!target[0]) return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+    if (!target[0]) return { status: "skip" as const, snapshot: await reply() };
     if (!(await canInteract(sql, context.userId, toUser))) {
-      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+      return { status: "skip" as const, snapshot: await reply() };
     }
     const existing = await sql<{ direction: string }>`
       select direction from vela_swipes where from_user = ${context.userId} and to_user = ${toUser}
     `;
-    if (existing[0]) return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+    if (existing[0]) return { status: "skip" as const, snapshot: await reply() };
     const caps = await sql<{ minute: number | string; today: number | string }>`
       select
         count(*) filter (where created_at > now() - interval '1 minute') as minute,
@@ -689,12 +704,12 @@ export const swipe = createServerFn({ method: "POST" })
       from vela_swipes where from_user = ${context.userId}
     `;
     if (swipeCapHit(Number(caps[0]?.minute ?? 0), Number(caps[0]?.today ?? 0))) {
-      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+      return { status: "skip" as const, snapshot: await reply() };
     }
     if (direction === "spark") {
       const prompts = asPrompts(target[0].prompts);
       if (!prompts.some((prompt) => prompt.id === promptId)) {
-        return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+        return { status: "skip" as const, snapshot: await reply() };
       }
     }
     // The free daily allowance, the burst counters and the insert run in one
@@ -743,10 +758,10 @@ export const swipe = createServerFn({ method: "POST" })
       return inserted.length === 0 ? "skip" : "inserted";
     });
     if (outcome === "limit") {
-      return { status: "limit" as const, snapshot: await snapshot(sql, context.userId) };
+      return { status: "limit" as const, snapshot: await reply() };
     }
     if (outcome === "skip") {
-      return { status: "skip" as const, snapshot: await snapshot(sql, context.userId) };
+      return { status: "skip" as const, snapshot: await reply() };
     }
     if (direction === "spark" && note) {
       // The spark note counts toward the message cap, so it takes the same
@@ -774,13 +789,20 @@ export const swipe = createServerFn({ method: "POST" })
       `;
       if (back.length > 0) status = "match";
     }
-    return { status, snapshot: await snapshot(sql, context.userId) };
+    return { status, snapshot: await reply() };
   });
 
 export const undoPass = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
+  .validator((input: { known?: Record<string, string>; held?: Record<string, string> } | undefined) => input)
+  .handler(async ({ context, data }) => {
     const sql = await getSql();
+    const reply = () =>
+      snapshot(sql, context.userId, {
+        poll: true,
+        known: cleanKnownPhotos(data?.known),
+        knownMessages: cleanKnownMessages(data?.held),
+      });
     // Same per-person lock as swipe: an undo and a parallel swipe (or a double
     // tap on "Rückgängig") are serialized, and only the request that actually
     // deleted the pass reports it, so one tap never undoes two passes.
@@ -803,9 +825,9 @@ export const undoPass = createServerFn({ method: "POST" })
       return deleted[0]?.to_user ?? null;
     });
     if (undone === false) {
-      return { ok: false, snapshot: await snapshot(sql, context.userId) };
+      return { ok: false, snapshot: await reply() };
     }
-    return { ok: Boolean(undone), id: undone, snapshot: await snapshot(sql, context.userId) };
+    return { ok: Boolean(undone), id: undone, snapshot: await reply() };
   });
 
 export const sendMessage = createServerFn({ method: "POST" })
