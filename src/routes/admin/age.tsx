@@ -24,6 +24,19 @@ function when(isoDate: string) {
   return isoDate ? new Date(isoDate).toLocaleString("de-AT") : "";
 }
 
+/** Apple (1.2) expects reports to be handled within 24 hours. */
+const REPORT_DEADLINE_HOURS = 24;
+
+function waiting(isoDate: string) {
+  const hours = isoDate ? (Date.now() - new Date(isoDate).getTime()) / 3_600_000 : 0;
+  if (!Number.isFinite(hours) || hours < 0) return null;
+  const left = REPORT_DEADLINE_HOURS - hours;
+  const label = hours < 1 ? "wartet < 1 Std." : `wartet ${Math.floor(hours)} Std.`;
+  if (left <= 0) return { label: `${label} · über 24 Std.!`, urgent: true };
+  if (left <= 4) return { label: `${label} · noch ${Math.ceil(left)} Std.`, urgent: true };
+  return { label, urgent: false };
+}
+
 function AdminAge() {
   const [data, setData] = useState<AdminData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +116,7 @@ function AdminAge() {
       </div>
 
       <h2 className="mt-10 font-display text-2xl">Offene Meldungen ({data.reports.length})</h2>
+      <p className="mt-1 text-xs text-muted">Älteste zuerst. Für die App-Stores bitte jede Meldung innerhalb von 24 Stunden bearbeiten.</p>
       <div className="mt-4 grid gap-3">
         {data.reports.length === 0 && <p className="text-sm text-muted">Keine offenen Meldungen.</p>}
         {data.reports.map((report) => (
@@ -111,6 +125,10 @@ function AdminAge() {
               <span className={report.reason === "minor" ? "text-ember" : ""}>{reasonLabel(report.reason)}</span> ·{" "}
               {report.name ?? report.toUser} · {report.status ?? "kein Profil"} · {when(report.createdAt)}
             </p>
+            {(() => {
+              const wait = waiting(report.createdAt);
+              return wait && <p className={`mt-1 text-xs ${wait.urgent ? "font-semibold text-ember" : "text-muted"}`}>{wait.label}</p>;
+            })()}
             {report.details && <p className="mt-1 text-sm text-muted">„{report.details}“</p>}
             <div className="mt-3 flex gap-2">
               <button
