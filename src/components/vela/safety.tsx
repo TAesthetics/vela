@@ -118,6 +118,7 @@ export function SafetyMenu({ personId, name, onDone }: { personId: string; name:
                   value={details}
                   onChange={(event) => setDetails(event.target.value.slice(0, 1000))}
                   placeholder="Optional: Was ist passiert?"
+                  aria-label="Was ist passiert? Optional"
                   rows={3}
                   className="w-full rounded-2xl border border-line bg-surface p-3 text-sm text-paper"
                 />

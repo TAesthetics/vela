@@ -157,7 +157,11 @@ function AgeSuspended({ suspension }: { suspension: Suspension }) {
               className="mt-2 block w-full text-sm text-muted file:mr-3 file:h-11 file:rounded-full file:border-0 file:bg-surface file:px-4 file:text-paper"
             />
           </label>
-          {error && <p className="text-sm text-ember">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-ember">
+              {error}
+            </p>
+          )}
           <PrimaryButton disabled={!file || busy} onClick={() => void submit()}>
             {busy ? "Wird hochgeladen…" : "Ausweis zur Prüfung senden"}
           </PrimaryButton>

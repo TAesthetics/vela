@@ -237,6 +237,7 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Schreib, nicht swipen"
+          aria-label="Nachricht"
           className="h-12 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-base text-paper outline-none placeholder:text-muted"
         />
         <button
@@ -426,7 +427,11 @@ function ChangePassword() {
         onChange={(event) => setRepeat(event.target.value)}
         className={field}
       />
-      {message && <p className="text-sm text-ember">{message}</p>}
+      {message && (
+        <p role="status" className="text-sm text-ember">
+          {message}
+        </p>
+      )}
       <PrimaryButton type="submit" disabled={busy || !current || !next || !repeat}>
         {busy ? "Wird geändert…" : "Neues Passwort speichern"}
       </PrimaryButton>
@@ -488,7 +493,11 @@ function SignOutOtherDevices() {
           Auf allen anderen Geräten abmelden
         </button>
       )}
-      {message && <p className="text-sm text-ember">{message}</p>}
+      {message && (
+        <p role="status" className="text-sm text-ember">
+          {message}
+        </p>
+      )}
     </div>
   );
 }
@@ -561,6 +570,7 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
             key={orbit.id}
             type="button"
             onClick={() => patch({ orbit: orbit.id as Orbit })}
+            aria-pressed={draft.orbit === orbit.id}
             className={cn(
               "h-11 rounded-full px-4 text-sm",
               draft.orbit === orbit.id ? "bg-paper text-ink" : "bg-surface text-muted",
@@ -578,6 +588,7 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
             key={value}
             type="button"
             onClick={() => toggleValue(value)}
+            aria-pressed={draft.values.includes(value)}
             className={cn(
               "h-11 rounded-full px-4 text-sm",
               draft.values.includes(value) ? "bg-ember text-ink" : "bg-surface text-paper",
@@ -608,7 +619,11 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
         ))}
       </div>
 
-      {note && <p className="mt-4 text-sm text-ember">{note}</p>}
+      {note && (
+        <p role="status" className="mt-4 text-sm text-ember">
+          {note}
+        </p>
+      )}
       <div className="mt-4">
         <PrimaryButton
           disabled={busy}
@@ -877,6 +892,7 @@ export function Nav({
             key={item.id}
             type="button"
             onClick={() => onChange(item.id)}
+            aria-current={active ? "page" : undefined}
             className={cn(
               "flex h-16 flex-1 flex-col items-center justify-center gap-1 text-xs",
               active ? "font-medium text-paper" : "text-muted",

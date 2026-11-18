@@ -217,6 +217,7 @@ function FilterChip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         "h-11 shrink-0 rounded-full px-4 text-sm",
         active ? "bg-paper text-ink" : "bg-surface text-muted",
@@ -441,6 +442,7 @@ function NoteSheet({
               key={prompt.id}
               type="button"
               onClick={() => setPromptId(prompt.id)}
+              aria-pressed={promptId === prompt.id}
               className={cn(
                 "rounded-2xl border px-4 py-3 text-left",
                 promptId === prompt.id ? "border-ember" : "border-line",
@@ -457,6 +459,7 @@ function NoteSheet({
           maxLength={180}
           onChange={(event) => setNote(event.target.value)}
           placeholder="Eine Zeile dazu. Oder leer lassen."
+          aria-label="Notiz zum Funken, optional"
           className="mt-4 w-full resize-none rounded-2xl border border-line bg-bg px-4 py-3 text-base text-paper outline-none placeholder:text-muted"
         />
         <div className="mt-4 pb-4">

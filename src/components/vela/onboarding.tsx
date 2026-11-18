@@ -79,7 +79,11 @@ export function Onboarding() {
             }}
           />
         )}
-        {error && <p className="mt-4 text-sm text-ember">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-ember">
+            {error}
+          </p>
+        )}
       </div>
       {step > 0 && (
         <div className="mt-4 grid gap-3">
@@ -206,6 +210,7 @@ function OrbitPick({ orbit, onPick }: { orbit: Orbit; onPick: (orbit: Orbit) => 
             key={item.id}
             type="button"
             onClick={() => onPick(item.id)}
+            aria-pressed={orbit === item.id}
             className={cn(
               "rounded-2xl border px-4 py-4 text-left",
               orbit === item.id ? "border-ember bg-surface" : "border-line",
@@ -245,6 +250,7 @@ function Prompts({ draft, patch }: { draft: Me; patch: (partial: Partial<Me>) =>
                     q: nextQuestion(prompt.q, draft.prompts[index === 0 ? 1 : 0]?.q ?? ""),
                   })
                 }
+                aria-label="Andere Frage"
                 className="shrink-0 text-sm text-ember"
               >
                 Andere
@@ -254,6 +260,7 @@ function Prompts({ draft, patch }: { draft: Me; patch: (partial: Partial<Me>) =>
               value={prompt.a}
               rows={3}
               onChange={(event) => setPrompt(index, { a: event.target.value })}
+              aria-label={prompt.q}
               placeholder="Konkret. Sinnlich. Kein Pitch."
               className="mt-3 w-full resize-none rounded-xl border border-line bg-bg px-3 py-3 text-base text-paper outline-none placeholder:text-muted"
             />
@@ -277,6 +284,7 @@ function ValuesPick({ values, onToggle }: { values: string[]; onToggle: (value: 
               key={value}
               type="button"
               onClick={() => onToggle(value)}
+              aria-pressed={on}
               className={cn(
                 "h-11 rounded-full px-4 text-sm",
                 on ? "bg-ember text-ink" : "bg-surface text-paper",

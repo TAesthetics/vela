@@ -26,7 +26,8 @@ const LEET: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "
 // Invisible format characters (zero-width space/joiner, soft hyphen, BOM,
 // bidi overrides like U+202E, Unicode tag characters, ...): Unicode "Cf".
 const FORMAT_CHARS = /\p{Cf}/gu;
-// Control characters except line break and tab.
+// Control characters except line break and tab (matching them is the point).
+// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
 
 /**
