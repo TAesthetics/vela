@@ -122,22 +122,35 @@ export function TextInput({
   placeholder,
   type = "text",
   inputMode,
+  maxLength,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
   inputMode?: "text" | "numeric";
+  maxLength?: number;
 }) {
   return (
     <input
       value={value}
       type={type}
       inputMode={inputMode}
+      maxLength={maxLength}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
       className="h-12 w-full rounded-2xl border border-line bg-surface px-4 text-base text-paper outline-none placeholder:text-muted"
     />
+  );
+}
+
+/** Zeigt „123/500“, sobald ein Text nahe an seiner Höchstlänge ist (ab 80 %). */
+export function LengthHint({ value, max, className }: { value: string; max: number; className?: string }) {
+  if (value.length < max * 0.8) return null;
+  return (
+    <span className={cn("block text-right text-xs tabular-nums", value.length >= max ? "text-ember" : "text-muted", className)}>
+      {value.length}/{max}
+    </span>
   );
 }
 

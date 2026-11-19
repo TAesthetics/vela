@@ -14,7 +14,7 @@ import {
 } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
 import { UserButton } from "@/lib/auth/gates";
-import { FieldLabel, Portrait, PrimaryButton, TextInput, cn } from "@/components/vela/ui";
+import { FieldLabel, LengthHint, Portrait, PrimaryButton, TextInput, cn } from "@/components/vela/ui";
 import { SafetyMenu } from "@/components/vela/safety";
 import { LegalLinks } from "@/components/vela/legal";
 import { exportMyData } from "@/lib/vela/api";
@@ -236,22 +236,26 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
           event.preventDefault();
           submit();
         }}
-        className="flex gap-2 border-t border-line p-3 pb-safe"
+        className="border-t border-line p-3 pb-safe"
       >
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Schreib, nicht swipen"
-          aria-label="Nachricht"
-          className="h-12 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-base text-paper outline-none placeholder:text-muted"
-        />
-        <button
-          type="submit"
-          disabled={!draft.trim() || sending}
-          className="h-12 shrink-0 rounded-full bg-ember px-4 text-sm font-medium text-ink disabled:opacity-40"
-        >
-          Senden
-        </button>
+        <LengthHint value={draft} max={500} className="mb-1 px-4" />
+        <div className="flex gap-2">
+          <input
+            value={draft}
+            maxLength={500}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Schreib, nicht swipen"
+            aria-label="Nachricht"
+            className="h-12 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-base text-paper outline-none placeholder:text-muted"
+          />
+          <button
+            type="submit"
+            disabled={!draft.trim() || sending}
+            className="h-12 shrink-0 rounded-full bg-ember px-4 text-sm font-medium text-ink disabled:opacity-40"
+          >
+            Senden
+          </button>
+        </div>
       </form>
     </div>
   );
@@ -560,11 +564,11 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
       <div className="mt-6 grid gap-4">
         <label>
           <FieldLabel>Vorname</FieldLabel>
-          <TextInput value={draft.name} onChange={(name) => patch({ name })} />
+          <TextInput value={draft.name} maxLength={32} onChange={(name) => patch({ name })} />
         </label>
         <label>
           <FieldLabel>Stadt</FieldLabel>
-          <TextInput value={draft.city} onChange={(city) => patch({ city })} />
+          <TextInput value={draft.city} maxLength={40} onChange={(city) => patch({ city })} />
         </label>
       </div>
 
@@ -611,6 +615,7 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
             <textarea
               value={prompt.a}
               rows={3}
+              maxLength={280}
               onChange={(event) =>
                 patch({
                   prompts: draft.prompts.map((item, itemIndex) =>
@@ -620,6 +625,7 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
               }
               className="mt-2 w-full resize-none bg-transparent text-base text-paper outline-none"
             />
+            <LengthHint value={prompt.a} max={280} />
           </label>
         ))}
       </div>

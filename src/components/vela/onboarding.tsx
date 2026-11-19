@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ORBITS, VALUES, blankMe, nextQuestion, type Me, type Orbit } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
-import { FieldLabel, PrimaryButton, TextInput, Wordmark, cn } from "@/components/vela/ui";
+import { FieldLabel, LengthHint, PrimaryButton, TextInput, Wordmark, cn } from "@/components/vela/ui";
 
 export function Onboarding() {
   const save = useVela((state) => state.save);
@@ -144,7 +144,7 @@ function Basics({
       </div>
       <label>
         <FieldLabel>Vorname</FieldLabel>
-        <TextInput value={draft.name} placeholder="Mira" onChange={(name) => patch({ name })} />
+        <TextInput value={draft.name} maxLength={32} placeholder="Mira" onChange={(name) => patch({ name })} />
       </label>
       <label>
         <FieldLabel>Alter</FieldLabel>
@@ -160,7 +160,7 @@ function Basics({
       </label>
       <label>
         <FieldLabel>Stadt</FieldLabel>
-        <TextInput value={draft.city} placeholder="Berlin" onChange={(city) => patch({ city })} />
+        <TextInput value={draft.city} maxLength={40} placeholder="Berlin" onChange={(city) => patch({ city })} />
       </label>
       <label className="flex items-start gap-3 text-sm text-paper">
         <input
@@ -259,11 +259,13 @@ function Prompts({ draft, patch }: { draft: Me; patch: (partial: Partial<Me>) =>
             <textarea
               value={prompt.a}
               rows={3}
+              maxLength={280}
               onChange={(event) => setPrompt(index, { a: event.target.value })}
               aria-label={prompt.q}
               placeholder="Konkret. Sinnlich. Kein Pitch."
               className="mt-3 w-full resize-none rounded-xl border border-line bg-bg px-3 py-3 text-base text-paper outline-none placeholder:text-muted"
             />
+            <LengthHint value={prompt.a} max={280} />
           </div>
         ))}
       </div>
