@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { REPORT_REASONS, type ReportReason } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
-import { PrimaryButton, cn } from "@/components/vela/ui";
+import { LengthHint, PrimaryButton, cn } from "@/components/vela/ui";
 
 type Step = "closed" | "menu" | "block" | "report";
 
@@ -120,8 +120,10 @@ export function SafetyMenu({ personId, name, onDone }: { personId: string; name:
                   placeholder="Optional: Was ist passiert?"
                   aria-label="Was ist passiert? Optional"
                   rows={3}
+                  maxLength={1000}
                   className="w-full rounded-2xl border border-line bg-surface p-3 text-sm text-paper"
                 />
+                <LengthHint value={details} max={1000} />
                 <PrimaryButton
                   disabled={busy || !reason}
                   onClick={() => reason && void run(() => report(personId, reason, details))}

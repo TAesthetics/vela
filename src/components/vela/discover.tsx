@@ -8,7 +8,7 @@ import {
   type Person,
 } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
-import { Portrait, PrimaryButton, RoundButton, Wordmark, cn } from "@/components/vela/ui";
+import { LengthHint, Portrait, PrimaryButton, RoundButton, Wordmark, cn } from "@/components/vela/ui";
 
 type Fly = "left" | "right" | null;
 
@@ -462,6 +462,7 @@ function NoteSheet({
           aria-label="Notiz zum Funken, optional"
           className="mt-4 w-full resize-none rounded-2xl border border-line bg-bg px-4 py-3 text-base text-paper outline-none placeholder:text-muted"
         />
+        <LengthHint value={note} max={180} className="mt-1" />
         <div className="mt-4 pb-4">
           <PrimaryButton onClick={() => onSend(promptId, note)}>Funken</PrimaryButton>
         </div>
