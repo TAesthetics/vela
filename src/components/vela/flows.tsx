@@ -157,8 +157,13 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
     const text = draft.trim();
     if (!text || sending) return;
     setSending(true);
-    void send(id, text).finally(() => setSending(false));
     setDraft("");
+    void send(id, text).then((sent) => {
+      setSending(false);
+      // Not sent (no connection, filtered word, ...): give the text back unless
+      // something new was typed meanwhile.
+      if (!sent) setDraft((current) => current || text);
+    });
   }
 
   return (

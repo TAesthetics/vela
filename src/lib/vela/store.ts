@@ -44,7 +44,8 @@ type VelaStore = {
   pass: (id: string) => Promise<SparkResult>;
   undo: () => Promise<boolean>;
   spark: (personId: string, promptId: string, note: string) => Promise<SparkResult>;
-  send: (personId: string, text: string) => Promise<void>;
+  /** Resolves true when the message went out; false keeps the draft in the chat. */
+  send: (personId: string, text: string) => Promise<boolean>;
   unlockPlus: () => Promise<void>;
   /** Opens Stripe Checkout (or the billing portal). Resolves with an error text, null when redirecting. */
   checkoutPlus: () => Promise<string | null>;
@@ -205,8 +206,21 @@ export const useVela = create<VelaStore>((set, get) => ({
   send: async (personId, text) => {
     // Light answer like a poll: no own portrait, no photos or messages the app
     // already has (sending used to return every unveiled photo each time).
-    const result = await sendMessage({ data: { toUser: personId, text, ...pollHints(get().threads) } });
-    set(apply(keepKnown(result.snapshot, get()), { toast: result.error }));
+    try {
+      const result = await sendMessage({ data: { toUser: personId, text, ...pollHints(get().threads) } });
+      set(apply(keepKnown(result.snapshot, get()), { toast: result.error }));
+      return !result.error;
+    } catch {
+      // Lost connection (tunnel, lift, flight mode): say so instead of failing
+      // silently; the chat puts the text back so nothing typed is lost.
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      set({
+        toast: offline
+          ? "Keine Verbindung. Deine Nachricht ist noch nicht raus."
+          : "Senden hat nicht geklappt. Versuch es gleich nochmal.",
+      });
+      return false;
+    }
   },
   unlockPlus: async () => {
     const result = await setPlus();

@@ -15,6 +15,23 @@ type Screen =
   | { name: "plus" }
   | { name: "person"; id: string };
 
+/** Tracks navigator.onLine so the app can say when the phone has no network. */
+function useOnline() {
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const update = () => setOnline(navigator.onLine !== false);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  return online;
+}
+
 function Veil() {
   return (
     <Frame>
@@ -58,6 +75,7 @@ function Authed() {
   const sync = useVela((state) => state.sync);
   const [tab, setTab] = useState<Tab>("discover");
   const [screen, setScreen] = useState<Screen>({ name: "tabs" });
+  const online = useOnline();
 
   useEffect(() => {
     void load().catch(() => undefined);
@@ -90,7 +108,7 @@ function Authed() {
   useEffect(() => {
     if (!ready || typeof document === "undefined") return;
     const tick = () => {
-      if (document.visibilityState === "visible") void sync().catch(() => undefined);
+      if (document.visibilityState === "visible" && navigator.onLine !== false) void sync().catch(() => undefined);
     };
     const timer = window.setInterval(tick, inChat ? 8000 : 30000);
     const onVisible = () => {
@@ -98,7 +116,10 @@ function Authed() {
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
+    // Back online after a dead spot: catch up at once instead of waiting.
+    window.addEventListener("online", onVisible);
     return () => {
+      window.removeEventListener("online", onVisible);
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
@@ -135,10 +156,18 @@ function Authed() {
 
   const overlay = (
     <>
+      {!online && (
+        <div
+          role="status"
+          className="pointer-events-none absolute inset-x-5 top-5 z-50 rounded-full border border-ember/40 bg-ink px-4 py-2 text-center text-xs text-paper"
+        >
+          Keine Verbindung. Vela holt alles nach, sobald du wieder Netz hast.
+        </div>
+      )}
       {toast && (
         <div
           role="status"
-          className="pointer-events-none absolute inset-x-5 top-5 z-50 rounded-full bg-paper px-4 py-3 text-center text-sm text-ink"
+          className={`pointer-events-none absolute inset-x-5 ${online ? "top-5" : "top-16"} z-50 rounded-full bg-paper px-4 py-3 text-center text-sm text-ink`}
         >
           {toast}
         </div>
