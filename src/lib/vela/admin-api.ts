@@ -2,19 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 
-/**
- * Operator tools for age review. Access only for emails listed in the
- * ADMIN_EMAILS env var (comma-separated). Unset = nobody has access.
- */
+/** Operator tools for age review. Access rules: see admin-access.server.ts. */
 async function isAdmin(sql: Sql, userId: string) {
-  const allow = (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-  if (allow.length === 0) return false;
-  const rows = await sql<{ email: string }>`select email from "user" where id = ${userId}`;
-  const email = rows[0]?.email?.toLowerCase();
-  return Boolean(email && allow.includes(email));
+  const { isAdminUser } = await import("@/lib/vela/admin-access.server");
+  return isAdminUser(sql, userId);
 }
 
 export type AdminIdCheck = {
@@ -69,6 +60,8 @@ export type AdminData =
   | { allowed: false }
   | {
       allowed: true;
+      /** The signed-in operator's account ID (for the optional ADMIN_USER_IDS pin). */
+      adminUserId: string;
       checks: AdminIdCheck[];
       reports: AdminReport[];
       flags: AdminFlag[];
@@ -86,7 +79,7 @@ function iso(value: unknown) {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
-async function load(sql: Sql): Promise<AdminData> {
+async function load(sql: Sql, adminUserId: string): Promise<AdminData> {
   const { purgeExpired } = await import("@/lib/vela/age-review.server");
   await purgeExpired(sql);
   const checks = await sql<{ id: string; user_id: string; name: string | null; age: number | null; created_at: unknown; image: string | null }>`
@@ -122,6 +115,7 @@ async function load(sql: Sql): Promise<AdminData> {
   `;
   return {
     allowed: true,
+    adminUserId,
     banned: banned.map((row) => ({ userId: row.user_id, name: row.name, since: iso(row.suspended_at) })),
     errors: errors.map((row) => ({
       fingerprint: row.fingerprint,
@@ -169,7 +163,7 @@ export const loadAdmin = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<AdminData> => {
     const sql = await getSql();
     if (!(await isAdmin(sql, context.userId))) return { allowed: false };
-    return load(sql);
+    return load(sql, context.userId);
   });
 
 /** Approve → lifts the age suspension (not a rule ban); reject → stays suspended. Either way the ID image is deleted now. */
@@ -196,7 +190,7 @@ export const decideIdCheck = createServerFn({ method: "POST" })
         where user_id = ${userId} and status = 'suspended_age'
       `;
     }
-    return load(sql);
+    return load(sql, context.userId);
   });
 
 /**
@@ -223,7 +217,7 @@ export const resolveReport = createServerFn({ method: "POST" })
       await age.banForRules(sql, userId);
       await age.recordFlag(sql, userId, "operator", "banned", ["Vom Betreiber gesperrt (Regelverstoß)"]);
     }
-    return load(sql);
+    return load(sql, context.userId);
   });
 
 /** Lift a rule ban. An age suspension that is still open takes over again. */
@@ -248,7 +242,7 @@ export const liftRuleBan = createServerFn({ method: "POST" })
       `;
       if (open.length > 0) await age.suspendForAge(sql, userId);
     }
-    return load(sql);
+    return load(sql, context.userId);
   });
 
 export type AdminResetLink = { ok: true; link: string; expiresAt: string } | { ok: false; error: string };

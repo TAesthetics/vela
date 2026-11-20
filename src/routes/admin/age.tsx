@@ -69,7 +69,7 @@ function AdminAge() {
   if (!data.allowed) {
     return (
       <Shell>
-        <p className="text-muted">Kein Zugriff. Nur E-Mail-Adressen aus ADMIN_EMAILS dürfen diese Seite sehen.</p>
+        <p className="text-muted">Kein Zugriff. Nur Konten aus ADMIN_USER_IDS bzw. ADMIN_EMAILS (das erste Konto, das sich damit als Admin angemeldet hat) dürfen diese Seite sehen.</p>
       </Shell>
     );
   }
@@ -223,6 +223,13 @@ function AdminAge() {
           </li>
         ))}
       </ul>
+
+      <p className="mt-10 break-all text-xs text-muted">
+        Deine Konto-ID: <span className="select-all font-mono">{data.adminUserId}</span>
+        <span className="block break-normal">
+          Optional als ADMIN_USER_IDS in Vercel eintragen: dann zählt nur noch dieses Konto, nicht die E-Mail-Adresse.
+        </span>
+      </p>
     </Shell>
   );
 }

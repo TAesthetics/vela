@@ -32,6 +32,7 @@ Kaltstart leer ist, also nur zum Testen.
 | `BETTER_AUTH_URL` | Produktions-Adresse ohne `/` am Ende, z. B. `https://vela-xxxx.vercel.app` |
 | `VELA_SELF_HOSTED` | `1` (Anmeldung mit E-Mail + Passwort statt des Grok-Anmeldedienstes) |
 | `ADMIN_EMAILS` | deine E-Mail(s), durch Komma getrennt |
+| `ADMIN_USER_IDS` | optional: deine Konto-ID(s) (steht unten auf `/admin/age`). Wenn gesetzt, zählt nur sie, `ADMIN_EMAILS` wird ignoriert |
 | `CRON_SECRET` | optional, empfohlen: zufällig (`openssl rand -hex 32`); schützt `/api/cron/retention` (siehe Abschnitt 7) |
 
 `VITE_AUTH_PROVIDERS`, `GOOGLE_*` und `X_*` werden nicht mehr gebraucht (schaden aber nicht).
@@ -48,6 +49,11 @@ Passwort vergessen → Mail an den Betreiber.
 **Wichtig:** Registriere dich nach dem ersten Deploy sofort selbst mit der Adresse aus
 `ADMIN_EMAILS`. E-Mails werden nicht bestätigt, also bekommt Admin-Rechte, wer die
 Adresse zuerst registriert.
+
+Jede Adresse aus `ADMIN_EMAILS` wird beim ersten Öffnen von `/admin` fest an dieses Konto
+gebunden (Tabelle `vela_admin_pins`). Wird das Konto gelöscht und jemand registriert die
+Adresse neu, bekommt er keinen Zugriff. Hast du dich selbst neu registriert: neue Konto-ID
+als `ADMIN_USER_IDS` eintragen und neu deployen.
 
 ## 5. Prüfen
 
