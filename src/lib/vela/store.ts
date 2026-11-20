@@ -14,6 +14,8 @@ import {
   syncVela,
   undoPass,
 } from "@/lib/vela/api";
+import { failureText, isOffline, type FailedAction } from "@/lib/vela/request-failure";
+import { reportError } from "@/lib/vela/error-reporter";
 import { emptySnapshot, mergeMessages, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
 export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip" | "filtered";
@@ -74,6 +76,16 @@ function readSeen() {
   } catch {
     return {};
   }
+}
+
+/**
+ * A request that failed outright (no network, server down or crashed): the
+ * text to show. Real server failures still reach the crash reports.
+ */
+function failed(action: FailedAction, err: unknown) {
+  const offline = isOffline();
+  if (!offline) reportError(err);
+  return failureText(action, offline);
 }
 
 /** Bumped on every full snapshot apply, so a slower background sync never overwrites newer state. */
@@ -168,23 +180,48 @@ export const useVela = create<VelaStore>((set, get) => ({
     });
   },
   save: async (me) => {
-    const result = await saveProfile({ data: me });
+    let result;
+    try {
+      result = await saveProfile({ data: me });
+    } catch (err) {
+      // Without this the save button stayed on "Speichert…" (onboarding too).
+      return failed("save", err);
+    }
     if (result.error || !result.snapshot) return result.error ?? "Speichern ging schief.";
     set(apply(result.snapshot));
     return null;
   },
   pass: async (id) => {
-    const result = await swipe({ data: { toUser: id, direction: "pass", ...pollHints(get().threads) } });
+    let result;
+    try {
+      result = await swipe({ data: { toUser: id, direction: "pass", ...pollHints(get().threads) } });
+    } catch (err) {
+      // The card stays in the deck (nothing was stored), so it simply comes back.
+      set({ toast: failed("swipe", err) });
+      return "skip";
+    }
     set(apply(keepKnown(result.snapshot, get()), { frontId: null }));
     return result.status;
   },
   undo: async () => {
-    const result = await undoPass({ data: pollHints(get().threads) });
+    let result;
+    try {
+      result = await undoPass({ data: pollHints(get().threads) });
+    } catch (err) {
+      set({ toast: failed("undo", err) });
+      return false;
+    }
     set(apply(keepKnown(result.snapshot, get()), { frontId: result.id }));
     return result.ok;
   },
   spark: async (personId, promptId, note) => {
-    const result = await swipe({ data: { toUser: personId, direction: "spark", promptId, note, ...pollHints(get().threads) } });
+    let result;
+    try {
+      result = await swipe({ data: { toUser: personId, direction: "spark", promptId, note, ...pollHints(get().threads) } });
+    } catch (err) {
+      set({ toast: failed("swipe", err) });
+      return "skip";
+    }
     const person = result.snapshot.threads.find((thread) => thread.person.id === personId)?.person;
     if (result.status === "match") void import("@/lib/native").then(({ nativeHaptic }) => nativeHaptic("match"));
     set(
@@ -210,15 +247,10 @@ export const useVela = create<VelaStore>((set, get) => ({
       const result = await sendMessage({ data: { toUser: personId, text, ...pollHints(get().threads) } });
       set(apply(keepKnown(result.snapshot, get()), { toast: result.error }));
       return !result.error;
-    } catch {
+    } catch (err) {
       // Lost connection (tunnel, lift, flight mode): say so instead of failing
       // silently; the chat puts the text back so nothing typed is lost.
-      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
-      set({
-        toast: offline
-          ? "Keine Verbindung. Deine Nachricht ist noch nicht raus."
-          : "Senden hat nicht geklappt. Versuch es gleich nochmal.",
-      });
+      set({ toast: failed("send", err) });
       return false;
     }
   },
@@ -258,17 +290,34 @@ export const useVela = create<VelaStore>((set, get) => ({
     }
   },
   uploadId: async (image) => {
-    const result = await uploadIdDocument({ data: { image } });
+    let result;
+    try {
+      result = await uploadIdDocument({ data: { image } });
+    } catch (err) {
+      return failed("uploadId", err);
+    }
     set(apply(result.snapshot, { toast: result.error ?? "Danke. Wir prüfen deinen Ausweis." }));
     return result.error;
   },
   block: async (personId) => {
-    const result = await blockUser({ data: { toUser: personId, ...pollHints(get().threads) } });
+    let result;
+    try {
+      result = await blockUser({ data: { toUser: personId, ...pollHints(get().threads) } });
+    } catch (err) {
+      set({ toast: failed("block", err) });
+      return false;
+    }
     set(apply(keepKnown(result.snapshot, get()), { toast: result.error ?? "Blockiert. Ihr seht euch nicht mehr." }));
     return !result.error;
   },
   report: async (personId, reason, details) => {
-    const result = await reportUser({ data: { toUser: personId, reason, details, ...pollHints(get().threads) } });
+    let result;
+    try {
+      result = await reportUser({ data: { toUser: personId, reason, details, ...pollHints(get().threads) } });
+    } catch (err) {
+      set({ toast: failed("report", err) });
+      return false;
+    }
     set(
       apply(keepKnown(result.snapshot, get()), {
         toast: result.error ?? "Danke. Gemeldet und blockiert.",
