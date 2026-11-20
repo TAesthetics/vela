@@ -235,6 +235,17 @@ describe("block and retention hardening", () => {
     assert.match(send, /outcome === "ended"/);
   });
 
+  it("people without a profile see no one and can't swipe or write", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const snap = apiSrc.slice(apiSrc.indexOf("async function snapshot("), apiSrc.indexOf("const deckRows"));
+    const guard = snap.indexOf("if (!meRow) {");
+    assert.ok(guard > 0 && guard < snap.indexOf("from vela_profiles p"), "no-profile guard must come before any query about others");
+    assert.ok(snap.slice(guard, snap.indexOf("}", guard)).includes("...emptySnapshot()"));
+    const can = apiSrc.slice(apiSrc.indexOf("async function canInteract("), apiSrc.indexOf("async function ageVerified("));
+    assert.ok(can.includes('mine[0]?.status !== "active"'), "a missing own profile must not count as active");
+    assert.ok(!can.includes("statusOf(sql, me)"), "statusOf treats a missing profile as active");
+  });
+
   it("swipe and its spark note re-check blocks under the pair lock before inserting", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const swipe = apiSrc.slice(apiSrc.indexOf("export const swipe"), apiSrc.indexOf("export const undoPass"));

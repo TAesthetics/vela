@@ -229,9 +229,14 @@ async function messageLimitHit(sql: Sql, userId: string) {
   );
 }
 
-/** Rejects actions by suspended people and toward suspended/blocked people. */
+/**
+ * Rejects actions by suspended people and toward suspended/blocked people.
+ * Also by people without a profile yet: they haven't confirmed they're 18+
+ * and a remembered ban/age suspension is only applied on their first save.
+ */
 async function canInteract(sql: Sql, me: string, other: string) {
-  if ((await statusOf(sql, me)) !== "active") return false;
+  const mine = await sql<{ status: string }>`select status from vela_profiles where user_id = ${me}`;
+  if (mine[0]?.status !== "active") return false;
   if ((await statusOf(sql, other)) !== "active") return false;
   return !(await isBlocked(sql, me, other));
 }
@@ -349,6 +354,12 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
   const meRow = mine[0];
   // Suspended people see only the suspension screen — nothing about others.
   if (meRow && meRow.status && meRow.status !== "active") return suspensionSnapshot(sql, userId, meRow.status);
+  // No profile yet (onboarding): nothing about other people. Only after the
+  // first save is 18+ confirmed and a remembered ban/age suspension applied,
+  // so a fresh login must not browse the deck before that.
+  if (!meRow) {
+    return { ...emptySnapshot(), plusAvailable: await plusAvailable(), billing: await billingSnapshot(sql, userId) };
+  }
   const plus = meRow ? asBool(meRow.plus) : false;
   const usedRows = await sql<{ n: number }>`
     select count(*) as n from vela_swipes
