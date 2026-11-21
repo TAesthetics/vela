@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, type FailedAction } from "./request-failure.ts";
+import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "./request-failure.ts";
 
 const ACTIONS: FailedAction[] = ["save", "swipe", "undo", "send", "block", "report", "uploadId"];
 
@@ -38,4 +38,13 @@ test("isUnauthorized only matches the server's ended-session error", () => {
 
 test("signed-out text is short German", () => {
   assert.equal(SIGNED_OUT_TEXT, "Du wurdest abgemeldet.");
+});
+
+test("a failed first load says why instead of loading forever", () => {
+  const offline = loadFailureText(true);
+  const failed = loadFailureText(false);
+  assert.ok(offline.startsWith("Keine Verbindung."));
+  assert.ok(failed.length > 10 && !failed.startsWith("Keine Verbindung."));
+  assert.notEqual(offline, SIGNED_OUT_TEXT);
+  assert.notEqual(failed, SIGNED_OUT_TEXT);
 });

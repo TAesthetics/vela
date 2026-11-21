@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useVela } from "@/lib/vela/store";
-import { Frame, Wordmark } from "@/components/vela/ui";
+import { Frame, PrimaryButton, Wordmark } from "@/components/vela/ui";
 import { Onboarding } from "@/components/vela/onboarding";
 import { Discover } from "@/components/vela/discover";
 import { Celebrate, Chat, MeScreen, Nav, PersonView, Plus, Signals } from "@/components/vela/flows";
@@ -32,13 +32,31 @@ function useOnline() {
   return online;
 }
 
-function Veil() {
+/**
+ * Loading screen. With `error` (the first load failed or the refused login
+ * could not be signed out, e.g. offline) it says why and offers a retry
+ * instead of waiting forever.
+ */
+function Veil({ error, onRetry }: { error?: string | null; onRetry?: () => void }) {
   return (
     <Frame>
-      <div className="grid min-h-0 flex-1 place-items-center">
-        <div className="text-center">
+      <div className="grid min-h-0 flex-1 place-items-center px-6">
+        <div className="w-full max-w-xs text-center">
           <Wordmark />
-          <p className="mt-3 text-sm text-muted">Der Schleier liegt.</p>
+          {error ? (
+            <>
+              <p role="alert" className="mt-3 text-sm text-muted">
+                {error}
+              </p>
+              {onRetry && (
+                <div className="mt-6">
+                  <PrimaryButton onClick={onRetry}>Nochmal versuchen</PrimaryButton>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="mt-3 text-sm text-muted">Der Schleier liegt.</p>
+          )}
         </div>
       </div>
     </Frame>
@@ -63,6 +81,7 @@ export function VelaApp() {
 function Authed() {
   const ready = useVela((state) => state.ready);
   const signedOut = useVela((state) => state.signedOut);
+  const loadError = useVela((state) => state.loadError);
   const me = useVela((state) => state.me);
   const suspension = useVela((state) => state.suspension);
   const toast = useVela((state) => state.toast);
@@ -81,6 +100,22 @@ function Authed() {
   useEffect(() => {
     void load().catch(() => undefined);
   }, [load]);
+
+  // The first load failed (see loadError): try again by hand, or by itself as
+  // soon as the phone is back online.
+  const retryLoad = () => {
+    useVela.setState({ loadError: null });
+    void load().catch(() => undefined);
+  };
+  useEffect(() => {
+    if (ready || !loadError || typeof window === "undefined") return;
+    const onOnline = () => {
+      useVela.setState({ loadError: null });
+      void load().catch(() => undefined);
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [ready, loadError, load]);
 
   // Back from Stripe Checkout / billing portal (?plus=success|cancel|portal).
   useEffect(() => {
@@ -133,7 +168,7 @@ function Authed() {
     return () => window.clearTimeout(timer);
   }, [toast, clearToast]);
 
-  if (!ready) return <Veil />;
+  if (!ready) return <Veil error={loadError} onRetry={retryLoad} />;
 
   if (suspension) {
     return (

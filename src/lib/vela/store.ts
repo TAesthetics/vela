@@ -14,7 +14,7 @@ import {
   syncVela,
   undoPass,
 } from "@/lib/vela/api";
-import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, type FailedAction } from "@/lib/vela/request-failure";
+import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "@/lib/vela/request-failure";
 import { reportError } from "@/lib/vela/error-reporter";
 import { emptySnapshot, mergeMessages, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
@@ -24,6 +24,12 @@ type VelaStore = {
   ready: boolean;
   /** The server ended this login elsewhere: polling stops, the app heads to sign-in. */
   signedOut: boolean;
+  /**
+   * Why the first load never arrived (offline, server down, or the login was
+   * refused and signing out failed too). Replaces the loading screen with a
+   * retry instead of hanging there forever. Cleared by every successful load.
+   */
+  loadError: string | null;
   me: Me | null;
   suspension: Suspension | null;
   plus: boolean;
@@ -92,7 +98,9 @@ function endSession() {
   useVela.setState({ signedOut: true, toast: SIGNED_OUT_TEXT });
   void import("@/lib/auth/client")
     .then(({ signOut }) => signOut("/?error=signed_out"))
-    .catch(() => useVela.setState({ signedOut: false }));
+    // Usually offline: let the next attempt try again, and don't leave a phone
+    // that never finished loading on the loading screen.
+    .catch(() => useVela.setState({ signedOut: false, loadError: SIGNED_OUT_TEXT }));
 }
 
 /**
@@ -166,6 +174,7 @@ function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
     inboundCount: snapshot.inboundCount,
     threads: snapshot.threads,
     ready: true,
+    loadError: null,
     ...extra,
   };
 }
@@ -173,6 +182,7 @@ function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
 export const useVela = create<VelaStore>((set, get) => ({
   ready: false,
   signedOut: false,
+  loadError: null,
   ...emptySnapshot(),
   frontId: null,
   seen: {},
@@ -185,6 +195,12 @@ export const useVela = create<VelaStore>((set, get) => ({
       snapshot = await loadVela();
     } catch (err) {
       if (isUnauthorized(err)) return endSession();
+      if (!get().ready) {
+        const offline = isOffline();
+        if (!offline) reportError(err);
+        set({ loadError: loadFailureText(offline) });
+        return;
+      }
       throw err;
     }
     const coach = typeof localStorage !== "undefined" && localStorage.getItem("vela-coach") === "1";

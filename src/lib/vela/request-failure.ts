@@ -59,3 +59,13 @@ export const SIGNED_OUT_TEXT = "Du wurdest abgemeldet.";
 export function isUnauthorized(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { message?: unknown }).message === "Unauthorized";
 }
+
+/**
+ * Shown instead of the endless "Der Schleier liegt." when the very first load
+ * fails (no network, server unreachable or crashed), with a retry button.
+ */
+export function loadFailureText(offline: boolean): string {
+  return offline
+    ? "Keine Verbindung. Vela lädt, sobald du wieder Netz hast."
+    : "Vela ließ sich gerade nicht laden. Versuch es gleich nochmal.";
+}
