@@ -67,7 +67,13 @@ export async function getSessionUser(
     headers = new Headers(request.headers);
     headers.set("Authorization", `Bearer ${bearerToken}`);
   }
-  const session = await auth.api.getSession({ headers });
+  // Always check the session row in the database, never only the signed
+  // `session_data` cookie cache (maxAge 300 in server.ts): otherwise a session
+  // ended elsewhere (password change, "sign out other devices", account
+  // deletion on another phone) would keep reading chats and writing data for up
+  // to 5 minutes, e.g. re-creating a profile for an already deleted account.
+  // The cache still serves the client's `/get-session` (no loading flicker).
+  const session = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
   if (!session?.user) return null;
   return { id: session.user.id, email: session.user.email ?? null };
 }

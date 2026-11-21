@@ -19,3 +19,13 @@ describe("authRuleFor", () => {
     assert.equal(authRuleFor("not a url"), null);
   });
 });
+
+describe("server-function sessions", () => {
+  it("check the session in the database, not only the cookie cache", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../auth/verify.server.ts", import.meta.url), "utf8");
+    const fn = src.slice(src.indexOf("export async function getSessionUser"), src.indexOf("export async function requireUserId"));
+    assert.match(fn, /auth\.api\.getSession\(\{ headers, query: \{ disableCookieCache: true \} \}\)/);
+    assert.doesNotMatch(fn, /auth\.api\.getSession\(\{ headers \}\)/);
+  });
+});
