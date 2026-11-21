@@ -46,3 +46,16 @@ export function failureText(action: FailedAction, offline: boolean): string {
 export function isOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
+
+/** Shown when the server no longer accepts this phone's login (ended elsewhere). */
+export const SIGNED_OUT_TEXT = "Du wurdest abgemeldet.";
+
+/**
+ * True when a server function refused the request because the session is no
+ * longer valid: password changed, "Andere Geräte abmelden" or the account was
+ * deleted on another phone. `requireUserId` throws `UnauthorizedError`, whose
+ * message "Unauthorized" is the stable contract that survives serialization.
+ */
+export function isUnauthorized(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { message?: unknown }).message === "Unauthorized";
+}

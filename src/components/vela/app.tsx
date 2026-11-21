@@ -62,6 +62,7 @@ export function VelaApp() {
 
 function Authed() {
   const ready = useVela((state) => state.ready);
+  const signedOut = useVela((state) => state.signedOut);
   const me = useVela((state) => state.me);
   const suspension = useVela((state) => state.suspension);
   const toast = useVela((state) => state.toast);
@@ -106,7 +107,7 @@ function Authed() {
   // an open chat) and catch up right away when it comes back to the foreground.
   const inChat = screen.name === "chat";
   useEffect(() => {
-    if (!ready || typeof document === "undefined") return;
+    if (!ready || signedOut || typeof document === "undefined") return;
     const tick = () => {
       if (document.visibilityState === "visible" && navigator.onLine !== false) void sync().catch(() => undefined);
     };
@@ -124,7 +125,7 @@ function Authed() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [ready, inChat, sync]);
+  }, [ready, signedOut, inChat, sync]);
 
   useEffect(() => {
     if (!toast) return;

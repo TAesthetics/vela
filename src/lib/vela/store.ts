@@ -14,7 +14,7 @@ import {
   syncVela,
   undoPass,
 } from "@/lib/vela/api";
-import { failureText, isOffline, type FailedAction } from "@/lib/vela/request-failure";
+import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, type FailedAction } from "@/lib/vela/request-failure";
 import { reportError } from "@/lib/vela/error-reporter";
 import { emptySnapshot, mergeMessages, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
@@ -22,6 +22,8 @@ export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip" | "filtered
 
 type VelaStore = {
   ready: boolean;
+  /** The server ended this login elsewhere: polling stops, the app heads to sign-in. */
+  signedOut: boolean;
   me: Me | null;
   suspension: Suspension | null;
   plus: boolean;
@@ -79,10 +81,29 @@ function readSeen() {
 }
 
 /**
+ * The session was ended on another device (password change, "Andere Geräte
+ * abmelden", account deleted): the client's session cache would keep showing
+ * the app for up to 5 minutes, so sign out here the normal way (clears the
+ * cookies, reloads to the sign-in screen, which repeats the notice). If the
+ * sign-out request itself fails, the next refused request tries again.
+ */
+function endSession() {
+  if (useVela.getState().signedOut) return;
+  useVela.setState({ signedOut: true, toast: SIGNED_OUT_TEXT });
+  void import("@/lib/auth/client")
+    .then(({ signOut }) => signOut("/?error=signed_out"))
+    .catch(() => useVela.setState({ signedOut: false }));
+}
+
+/**
  * A request that failed outright (no network, server down or crashed): the
  * text to show. Real server failures still reach the crash reports.
  */
 function failed(action: FailedAction, err: unknown) {
+  if (isUnauthorized(err)) {
+    endSession();
+    return SIGNED_OUT_TEXT;
+  }
   const offline = isOffline();
   if (!offline) reportError(err);
   return failureText(action, offline);
@@ -151,6 +172,7 @@ function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
 
 export const useVela = create<VelaStore>((set, get) => ({
   ready: false,
+  signedOut: false,
   ...emptySnapshot(),
   frontId: null,
   seen: {},
@@ -158,15 +180,27 @@ export const useVela = create<VelaStore>((set, get) => ({
   celebrate: null,
   toast: null,
   load: async () => {
-    const snapshot = await loadVela();
+    let snapshot;
+    try {
+      snapshot = await loadVela();
+    } catch (err) {
+      if (isUnauthorized(err)) return endSession();
+      throw err;
+    }
     const coach = typeof localStorage !== "undefined" && localStorage.getItem("vela-coach") === "1";
     set({ ...apply(snapshot), seen: readSeen(), seenCoach: coach });
   },
   sync: async () => {
-    if (!get().ready) return;
+    if (!get().ready || get().signedOut) return;
     const before = applied;
     const { known, held } = pollHints(get().threads);
-    const snapshot = await syncVela({ data: { known, held } });
+    let snapshot;
+    try {
+      snapshot = await syncVela({ data: { known, held } });
+    } catch (err) {
+      if (isUnauthorized(err)) return endSession();
+      throw err;
+    }
     if (applied !== before) return;
     set({
       suspension: snapshot.suspension,
@@ -268,8 +302,8 @@ export const useVela = create<VelaStore>((set, get) => ({
       }
       set({ toast: result.error });
       return result.error;
-    } catch {
-      const error = "Die Bezahlseite ließ sich nicht öffnen.";
+    } catch (err) {
+      const error = isUnauthorized(err) ? failed("save", err) : "Die Bezahlseite ließ sich nicht öffnen.";
       set({ toast: error });
       return error;
     }
@@ -283,8 +317,8 @@ export const useVela = create<VelaStore>((set, get) => ({
       }
       set({ toast: result.error });
       return result.error;
-    } catch {
-      const error = "Die Abo-Verwaltung ließ sich nicht öffnen.";
+    } catch (err) {
+      const error = isUnauthorized(err) ? failed("save", err) : "Die Abo-Verwaltung ließ sich nicht öffnen.";
       set({ toast: error });
       return error;
     }
@@ -330,6 +364,7 @@ export const useVela = create<VelaStore>((set, get) => ({
     try {
       snapshot = await deleteProfile();
     } catch (err) {
+      if (isUnauthorized(err)) return endSession();
       set({ toast: err instanceof Error && err.message ? err.message : "Löschen ging gerade nicht." });
       return;
     }

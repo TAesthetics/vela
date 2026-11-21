@@ -309,6 +309,8 @@ export function signInErrorMessage(code: string | null | undefined): string {
   switch (code) {
     case "cancelled":
       return "Anmeldung abgebrochen.";
+    case "signed_out":
+      return "Du wurdest abgemeldet. Melde dich bitte neu an.";
     case "timeout":
       return "Die Anmeldung hat zu lange gedauert. Bitte versuch es noch einmal.";
     case "access_denied":
