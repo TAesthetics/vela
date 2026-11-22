@@ -16,7 +16,7 @@ import {
 } from "@/lib/vela/api";
 import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "@/lib/vela/request-failure";
 import { reportError } from "@/lib/vela/error-reporter";
-import { emptySnapshot, mergeMessages, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
+import { emptySnapshot, mergeMessages, messageTotal, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
 export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip" | "filtered";
 
@@ -131,7 +131,7 @@ function pollHints(threads: Thread[]) {
   for (const thread of threads) {
     if (thread.photo && thread.photoKey) known[thread.person.id] = thread.photoKey;
     const last = thread.messages[thread.messages.length - 1];
-    if (last) held[thread.person.id] = `${thread.messages.length}:${last.id}`;
+    if (last) held[thread.person.id] = `${messageTotal(thread)}:${last.id}`;
   }
   return { known, held };
 }
@@ -395,7 +395,7 @@ export const useVela = create<VelaStore>((set, get) => ({
   markSeen: (personId) => {
     const thread = get().threads.find((item) => item.person.id === personId);
     if (!thread) return;
-    const seen = { ...get().seen, [personId]: thread.messages.length };
+    const seen = { ...get().seen, [personId]: messageTotal(thread) };
     set({ seen });
     localStorage.setItem("vela-seen", JSON.stringify(seen));
   },

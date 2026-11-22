@@ -13,6 +13,7 @@ import {
   REPORT_REASONS,
   VALUES,
   isUnveiled,
+  CHAT_HISTORY_LIMIT,
   type Me,
   type Message,
   type Orbit,
@@ -433,40 +434,52 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
     // can't use the index for the pair_b side (full scan on every poll) and
     // would also load conversations with blocked or suspended people.
     // On a poll where the client already holds n messages ending in `last`,
-    // only the messages after those are sent. The veil counts come from window
-    // functions over the whole conversation (computed before OFFSET), so they
-    // stay exact even when only the tail is returned.
-    const loadMessages = (offset: number) => sql<{
+    // only the messages after those are sent. Never more than the last
+    // CHAT_HISTORY_LIMIT, so a long chat doesn't ship its whole history on
+    // every app start. The veil counts come from window functions over the
+    // whole conversation (computed before the row filter), so they stay exact
+    // even when only the tail is returned.
+    const loadMessages = (after: number) => sql<{
       id: string;
       from_user: string;
       body: string;
       kind: string;
       created_at: unknown;
+      rn: unknown;
       mine_total: unknown;
       their_total: unknown;
     }>`
-      select id, from_user, body, kind, created_at,
-        count(*) filter (where kind = 'message' and from_user = ${userId}) over () as mine_total,
-        count(*) filter (where kind = 'message' and from_user <> ${userId}) over () as their_total
-      from vela_messages
-      where pair_a = ${pairA} and pair_b = ${pairB}
-      order by created_at asc, id asc
-      offset ${offset}
+      select id, from_user, body, kind, created_at, rn, mine_total, their_total
+      from (
+        select id, from_user, body, kind, created_at,
+          row_number() over (order by created_at asc, id asc) as rn,
+          count(*) over () as total,
+          count(*) filter (where kind = 'message' and from_user = ${userId}) over () as mine_total,
+          count(*) filter (where kind = 'message' and from_user <> ${userId}) over () as their_total
+        from vela_messages
+        where pair_a = ${pairA} and pair_b = ${pairB}
+      ) conversation
+      where rn > greatest(${after}::int, total - ${CHAT_HISTORY_LIMIT}::int)
+      order by rn asc
     `;
     const held = options.knownMessages?.[row.user_id];
     let messagesFrom = 0;
+    let tail = false;
     let messageRows = held ? await loadMessages(held.n - 1) : [];
     if (!held || messageRows[0]?.id !== held.last) {
-      // Nothing held, or the client's copy doesn't line up: send everything.
+      // Nothing held, or the client's copy doesn't line up (or is more than
+      // CHAT_HISTORY_LIMIT behind): send the latest messages.
       messageRows = await loadMessages(0);
+      messagesFrom = messageRows.length > 0 ? Number(messageRows[0].rn) - 1 : 0;
     } else {
       messagesFrom = held.n;
+      tail = true;
     }
     // Every row carries the whole-conversation totals; with no messages at all
     // both are zero.
     const mineCount = Number(messageRows[0]?.mine_total ?? 0);
     const theirCount = Number(messageRows[0]?.their_total ?? 0);
-    if (messagesFrom > 0) messageRows = messageRows.slice(1);
+    if (tail) messageRows = messageRows.slice(1);
     const messages: Message[] = messageRows
       .map((message) => ({
         id: message.id,

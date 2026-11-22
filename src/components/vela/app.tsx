@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useVela } from "@/lib/vela/store";
+import { messageTotal } from "@/lib/vela/data";
 import { Frame, PrimaryButton, Wordmark } from "@/components/vela/ui";
 import { Onboarding } from "@/components/vela/onboarding";
 import { Discover } from "@/components/vela/discover";
@@ -187,7 +188,7 @@ function Authed() {
   }
 
   const unread = threads.reduce((count, thread) => {
-    return count + (thread.messages.length > (seen[thread.person.id] ?? 0) ? 1 : 0);
+    return count + (messageTotal(thread) > (seen[thread.person.id] ?? 0) ? 1 : 0);
   }, 0);
 
   const overlay = (

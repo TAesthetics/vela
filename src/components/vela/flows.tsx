@@ -7,6 +7,7 @@ import {
   VALUES,
   PLUS_PRICE_LABEL,
   formatTime,
+  messageTotal,
   orbitLabel,
   RESONANCE,
   resonanceParts,
@@ -51,7 +52,7 @@ export function Signals({
           <ul className="mt-2">
             {threads.map((thread) => {
               const last = thread.messages[thread.messages.length - 1];
-              const unread = thread.messages.length > (seen[thread.person.id] ?? 0);
+              const unread = messageTotal(thread) > (seen[thread.person.id] ?? 0);
               return (
                 <li key={thread.person.id}>
                   <button
@@ -130,6 +131,9 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
   const [sending, setSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const messages = thread?.messages ?? [];
+  // Whole-chat position of the last message: still grows when a long chat
+  // only holds its latest messages (see CHAT_HISTORY_LIMIT).
+  const total = thread ? messageTotal(thread) : 0;
   // Counts come from the server (spark notes excluded) — same rule that lifts the veil.
   const mine = thread?.mineCount ?? 0;
   const theirs = thread?.theirCount ?? 0;
@@ -137,11 +141,11 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
 
   useEffect(() => {
     markSeen(id);
-  }, [id, messages.length, markSeen]);
+  }, [id, total, markSeen]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
+  }, [total]);
 
   if (!thread) {
     return (
@@ -190,6 +194,9 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
             <p className="text-xs tracking-widest text-ember">SCHLEIER GEFALLEN</p>
             <img src={thread.photo} alt="" className="mx-auto mt-3 size-28 rounded-2xl object-cover" />
           </div>
+        )}
+        {(thread.messagesFrom ?? 0) > 0 && (
+          <p className="text-center text-xs text-muted">Ältere Nachrichten sind hier ausgeblendet.</p>
         )}
         {messages.map((message) => (
           <div key={message.id} className={cn("flex", message.from === "me" ? "justify-end" : "justify-start")}>

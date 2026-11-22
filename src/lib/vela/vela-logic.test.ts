@@ -3,7 +3,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { swipeCapHit, SWIPE_CAPS, isUnveiled, mergeMessages, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
+import { swipeCapHit, SWIPE_CAPS, isUnveiled, mergeMessages, messageTotal, CHAT_HISTORY_LIMIT, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
 import { isObjectionable, normalizeForFilter, stripInvisible } from "./content-filter.ts";
 import { checkoutDecision } from "./checkout-reuse.ts";
 
@@ -446,8 +446,41 @@ describe("chat polling sends only new messages", () => {
 
   it("takes a full list as is and never builds a chat with a gap", () => {
     assert.deepEqual(mergeMessages(thread(["a"], 0), thread(["x", "y"])).messages.map((m) => m.id), ["a"]);
+    // Local copy ends before the tail starts: the server's tail wins, at its real position.
     const short = mergeMessages(thread(["d"], 3), thread(["a"]));
-    assert.deepEqual(short.messages.map((m) => m.id), ["a"]);
+    assert.deepEqual(short.messages.map((m) => m.id), ["d"]);
+    assert.equal(short.messagesFrom, 3);
+  });
+
+  it("long chats hold only their latest messages and keep counting from the real position", () => {
+    assert.ok(CHAT_HISTORY_LIMIT >= 100 && CHAT_HISTORY_LIMIT <= 1000);
+    // App start: the server sent messages 500..501 of a long chat.
+    const window = thread(["m500", "m501"], 500);
+    assert.equal(messageTotal(window), 502);
+    // Next poll appends after them and keeps the window's start.
+    const polled = mergeMessages(thread(["m502"], 502), window);
+    assert.deepEqual(polled.messages.map((m) => m.id), ["m500", "m501", "m502"]);
+    assert.equal(polled.messagesFrom, 500);
+    assert.equal(messageTotal(polled), 503);
+    // A new match seen first in a poll keeps the window as sent.
+    const fresh = mergeMessages(thread(["m9"], 9), undefined);
+    assert.equal(fresh.messagesFrom, 9);
+    // A newer, later-starting window replaces a copy that fell too far behind.
+    const behind = mergeMessages(thread(["m900"], 900), window);
+    assert.deepEqual(behind.messages.map((m) => m.id), ["m900"]);
+    assert.equal(messageTotal(behind), 901);
+    assert.equal(messageTotal(thread(["a", "b"])), 2);
+  });
+
+  it("server caps each chat at CHAT_HISTORY_LIMIT and the app counts held messages by position", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const snap = apiSrc.slice(apiSrc.indexOf("async function snapshot("), apiSrc.indexOf("function cleanProfile("));
+    assert.ok(snap.includes("total - ${CHAT_HISTORY_LIMIT}::int"), "never more than the last CHAT_HISTORY_LIMIT messages");
+    assert.ok(snap.includes("Number(messageRows[0].rn) - 1"), "full answers say where the window starts");
+    const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+    const hints = storeSrc.slice(storeSrc.indexOf("function pollHints("), storeSrc.indexOf("function mergeThreads("));
+    assert.ok(hints.includes("${messageTotal(thread)}:${last.id}"), "held count is the position, not the local length");
+    assert.ok(storeSrc.includes("[personId]: messageTotal(thread)"), "read marks count by position too");
   });
 
   it("server trusts the client's copy only when it lines up and counts the veil over the whole chat", () => {
@@ -459,7 +492,7 @@ describe("chat polling sends only new messages", () => {
     const sync = apiSrc.slice(apiSrc.indexOf("export const syncVela"), apiSrc.indexOf("export const saveProfile"));
     assert.ok(sync.includes("knownMessages: cleanKnownMessages(data?.held)"));
     const load = apiSrc.slice(apiSrc.indexOf("export const loadVela"), apiSrc.indexOf("export const syncVela"));
-    assert.ok(!load.includes("knownMessages"), "full loads always send whole chats");
+    assert.ok(!load.includes("knownMessages"), "full loads never trust a held copy");
   });
 
   it("sending a message answers light too and the app keeps its portrait", () => {

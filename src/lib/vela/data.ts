@@ -47,9 +47,10 @@ export type Thread = {
   theirCount: number;
   messages: Message[];
   /**
-   * Index of messages[0] in the whole conversation. 0 = complete list; on a
-   * background poll > 0 means "only the messages after the first messagesFrom
-   * ones you already have".
+   * Index of messages[0] in the whole conversation. 0 = from the first
+   * message. > 0 either on a background poll ("only the messages after the
+   * first messagesFrom ones you already have") or because long chats send only
+   * their last CHAT_HISTORY_LIMIT messages (older ones stay on the server).
    */
   messagesFrom?: number;
 };
@@ -226,14 +227,30 @@ export function emptySnapshot(): Snapshot {
 }
 
 /**
- * A poll may send only the tail of a conversation (messagesFrom > 0): put the
- * messages the client already had in front of it. If the local copy is shorter
- * than promised (shouldn't happen), keep the local copy for now; the next
- * poll asks again from what we really have.
+ * Most messages sent per match in one answer: a long chat sends only its last
+ * ones, so opening the app doesn't load every conversation from the very first
+ * message (up to 600 messages a day each). The veil counts stay exact (counted
+ * over the whole chat on the server).
+ */
+export const CHAT_HISTORY_LIMIT = 300;
+
+/** How many messages the whole conversation had up to the last one held. */
+export function messageTotal(thread: Pick<Thread, "messages" | "messagesFrom">): number {
+  return (thread.messagesFrom ?? 0) + thread.messages.length;
+}
+
+/**
+ * An answer may send only the tail of a conversation (messagesFrom > 0): put
+ * the messages the client already had in front of it. messagesFrom stays the
+ * index of the first message held, so the next poll can say exactly how many
+ * it has. If the local copy ends before the tail starts (a gap), the server's
+ * tail replaces it, so a chat never shows with messages missing in between.
  */
 export function mergeMessages(incoming: Thread, old: Thread | undefined): Thread {
   const from = incoming.messagesFrom ?? 0;
-  if (from <= 0) return incoming;
-  if (!old || old.messages.length < from) return { ...incoming, messages: old?.messages ?? incoming.messages, messagesFrom: 0 };
-  return { ...incoming, messages: [...old.messages.slice(0, from), ...incoming.messages], messagesFrom: 0 };
+  if (from <= 0) return { ...incoming, messagesFrom: 0 };
+  if (!old) return incoming;
+  const base = old.messagesFrom ?? 0;
+  if (from <= base || from > base + old.messages.length) return incoming;
+  return { ...incoming, messages: [...old.messages.slice(0, from - base), ...incoming.messages], messagesFrom: base };
 }
