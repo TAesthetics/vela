@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Compass, Eye, Flame, MessageCircle, Smartphone, Undo2, UserRound } from "lucide-react";
 import {
   ICEBREAKERS,
@@ -127,9 +127,15 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
   const thread = useVela((state) => state.thread(id));
   const send = useVela((state) => state.send);
   const markSeen = useVela((state) => state.markSeen);
+  const loadOlder = useVela((state) => state.loadOlder);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // Scroll height before older messages were put on top, to keep the view still.
+  const heightBefore = useRef<number | null>(null);
+  const messagesFrom = thread?.messagesFrom ?? 0;
   const messages = thread?.messages ?? [];
   // Whole-chat position of the last message: still grows when a long chat
   // only holds its latest messages (see CHAT_HISTORY_LIMIT).
@@ -147,6 +153,15 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [total]);
 
+  // Older messages went in on top: move down by exactly their height, so the
+  // message that was on screen stays where it was.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list || heightBefore.current === null) return;
+    list.scrollTop += list.scrollHeight - heightBefore.current;
+    heightBefore.current = null;
+  }, [messagesFrom]);
+
   if (!thread) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -155,6 +170,20 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
         </button>
       </div>
     );
+  }
+
+  function showOlder() {
+    if (loadingOlder) return;
+    setLoadingOlder(true);
+    heightBefore.current = listRef.current?.scrollHeight ?? null;
+    // Never throws; on failure the store shows a toast and the button is free again.
+    void loadOlder(id).finally(() => {
+      setLoadingOlder(false);
+      // Nothing was added (no connection, ...): forget the height after this frame.
+      window.requestAnimationFrame(() => {
+        heightBefore.current = null;
+      });
+    });
   }
 
   function submit() {
@@ -188,15 +217,24 @@ export function Chat({ id, onBack }: { id: string; onBack: () => void }) {
         </div>
         <SafetyMenu personId={thread.person.id} name={thread.person.name} onDone={onBack} />
       </header>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {thread.unveiled && thread.photo && (
           <div className="px-4 py-2 text-center">
             <p className="text-xs tracking-widest text-ember">SCHLEIER GEFALLEN</p>
             <img src={thread.photo} alt="" className="mx-auto mt-3 size-28 rounded-2xl object-cover" />
           </div>
         )}
-        {(thread.messagesFrom ?? 0) > 0 && (
-          <p className="text-center text-xs text-muted">Ältere Nachrichten sind hier ausgeblendet.</p>
+        {messagesFrom > 0 && (
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={showOlder}
+              disabled={loadingOlder}
+              className="h-11 rounded-full border border-line px-4 text-xs text-paper disabled:opacity-40"
+            >
+              {loadingOlder ? "Lädt…" : "Ältere Nachrichten laden"}
+            </button>
+          </div>
         )}
         {messages.map((message) => (
           <div key={message.id} className={cn("flex", message.from === "me" ? "justify-end" : "justify-start")}>

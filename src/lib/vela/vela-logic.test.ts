@@ -3,7 +3,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { swipeCapHit, SWIPE_CAPS, isUnveiled, mergeMessages, messageTotal, CHAT_HISTORY_LIMIT, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
+import { swipeCapHit, SWIPE_CAPS, isUnveiled, mergeMessages, messageTotal, CHAT_HISTORY_LIMIT, OLDER_PAGE_SIZE, olderPageStart, prependOlder, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
 import { isObjectionable, normalizeForFilter, stripInvisible } from "./content-filter.ts";
 import { checkoutDecision } from "./checkout-reuse.ts";
 
@@ -536,3 +536,72 @@ describe("chat polling sends only new messages", () => {
     }
   });
 });
+
+describe("loading older messages", () => {
+  const msg = (id: string) => ({ id, from: "them" as const, kind: "message" as const, text: id, at: 0 });
+  const thread = (ids: string[], messagesFrom?: number) =>
+    ({ person: { id: "p" }, photo: null, photoKey: null, unveiled: false, mineCount: 0, theirCount: 0, messages: ids.map(msg), messagesFrom }) as never;
+  const ids = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => `m${from + i}`);
+
+  it("pages back OLDER_PAGE_SIZE at a time and stops at the first message", () => {
+    assert.equal(OLDER_PAGE_SIZE, 100);
+    assert.equal(olderPageStart(300), 200);
+    assert.equal(olderPageStart(40), 0);
+  });
+
+  it("puts the page in front at its real position, without touching the held count", () => {
+    const held = thread(ids(300, 600), 300);
+    const merged = prependOlder(held, { from: 200, messages: ids(200, 300).map(msg) });
+    assert.equal(merged.messagesFrom, 200);
+    assert.equal(merged.messages.length, 400);
+    assert.equal(merged.messages[0].id, "m200");
+    assert.equal(merged.messages[100].id, "m300");
+    // Unread dots and polling count by position: still 600.
+    assert.equal(messageTotal(merged), messageTotal(held));
+    // Back to the real start: messagesFrom 0 hides the button.
+    const start = prependOlder(thread(ids(40, 50), 40), { from: 0, messages: ids(0, 40).map(msg) });
+    assert.equal(start.messagesFrom, 0);
+    assert.deepEqual(start.messages.map((m) => m.id), ids(0, 50));
+  });
+
+  it("never duplicates, never leaves a gap", () => {
+    const held = thread(ids(300, 310), 300);
+    // Overlap (page reaches into the held messages): trimmed.
+    const overlap = prependOlder(held, { from: 200, messages: ids(200, 305).map(msg) });
+    assert.deepEqual(overlap.messages.map((m) => m.id), ids(200, 310));
+    // A page that ends before the held start would leave a gap: ignored.
+    assert.equal(prependOlder(held, { from: 100, messages: ids(100, 200).map(msg) }), held);
+    // Nothing older to add, or the chat already starts at 0: unchanged.
+    assert.equal(prependOlder(held, { from: 300, messages: [] }), held);
+    assert.equal(prependOlder(thread(ids(0, 5), 0), { from: 0, messages: ids(0, 5).map(msg) }).messages.length, 5);
+    // A page repeating an id already held (chat reloaded meanwhile): ignored.
+    const odd = prependOlder(held, { from: 299, messages: [msg("m305")] });
+    assert.equal(odd, held);
+  });
+
+  it("a poll after loading older messages keeps them", () => {
+    const older = prependOlder(thread(ids(300, 600), 300), { from: 200, messages: ids(200, 300).map(msg) });
+    const polled = mergeMessages(thread(["m600"], 600), older);
+    assert.equal(polled.messagesFrom, 200);
+    assert.equal(polled.messages.length, 401);
+    assert.equal(messageTotal(polled), 601);
+    // A fresh full window (latest CHAT_HISTORY_LIMIT) still lines up behind them.
+    const window = mergeMessages(thread(ids(301, 601), 301), older);
+    assert.equal(window.messagesFrom, 200);
+    assert.deepEqual(window.messages.slice(0, 2).map((m) => m.id), ["m200", "m201"]);
+    assert.equal(messageTotal(window), 601);
+  });
+
+  it("server reads older messages only under the chat's own rules and without photos", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const fn = apiSrc.slice(apiSrc.indexOf("export const loadOlderMessages"), apiSrc.indexOf("export const setPlus"));
+    assert.ok(fn.includes(".middleware([authMiddleware])"));
+    assert.ok(fn.includes("theirs.direction = 'spark'") && fn.includes("mine.direction = 'spark'"), "mutual match only");
+    assert.ok(fn.includes("canInteract(sql, context.userId, withUser)"), "active profiles, nobody blocked");
+    assert.ok(fn.includes("consumeRateLimit(sql, `vela:older-messages:"), "rate limited");
+    assert.ok(fn.includes("order by created_at asc, id asc"), "same numbering as the snapshot");
+    assert.ok(fn.includes("anchor.id !== firstId"), "page must line up with the first held message");
+    assert.ok(!/photo|unveil|mine_total|their_total/i.test(fn.replace(/\/\*\*[\s\S]*?\*\//, "")), "no photo or veil data");
+  });
+});
+

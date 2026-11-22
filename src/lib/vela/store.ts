@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   blockUser,
   deleteProfile,
+  loadOlderMessages,
   loadVela,
   openPlusPortal,
   reportUser,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/vela/api";
 import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "@/lib/vela/request-failure";
 import { reportError } from "@/lib/vela/error-reporter";
-import { emptySnapshot, mergeMessages, messageTotal, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
+import { emptySnapshot, mergeMessages, messageTotal, prependOlder, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
 export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip" | "filtered";
 
@@ -56,6 +57,8 @@ type VelaStore = {
   spark: (personId: string, promptId: string, note: string) => Promise<SparkResult>;
   /** Resolves true when the message went out; false keeps the draft in the chat. */
   send: (personId: string, text: string) => Promise<boolean>;
+  /** "Ältere Nachrichten laden": puts the previous page in front of the chat. Never throws. */
+  loadOlder: (personId: string) => Promise<void>;
   unlockPlus: () => Promise<void>;
   /** Opens Stripe Checkout (or the billing portal). Resolves with an error text, null when redirecting. */
   checkoutPlus: () => Promise<string | null>;
@@ -303,6 +306,35 @@ export const useVela = create<VelaStore>((set, get) => ({
       set({ toast: failed("send", err) });
       return false;
     }
+  },
+  loadOlder: async (personId) => {
+    const thread = get().thread(personId);
+    const before = thread?.messagesFrom ?? 0;
+    const first = thread?.messages[0];
+    if (!thread || before <= 0 || !first) return;
+    let result;
+    try {
+      result = await loadOlderMessages({ data: { withUser: personId, before, firstId: first.id } });
+    } catch (err) {
+      set({ toast: failed("older", err) });
+      return;
+    }
+    if (result.stale) {
+      // The chat changed on the server: load it fresh instead of guessing.
+      await get().load().catch(() => undefined);
+      return;
+    }
+    if (result.error) {
+      set({ toast: result.error });
+      return;
+    }
+    // Merged into the chat as it is now (a poll may have landed meanwhile);
+    // the held count and last id don't change, so polling keeps working.
+    set({
+      threads: get().threads.map((item) =>
+        item.person.id === personId ? prependOlder(item, { from: result.from, messages: result.messages }) : item,
+      ),
+    });
   },
   unlockPlus: async () => {
     const result = await setPlus();

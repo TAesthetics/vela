@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "./request-failure.ts";
 
-const ACTIONS: FailedAction[] = ["save", "swipe", "undo", "send", "block", "report", "uploadId"];
+const ACTIONS: FailedAction[] = ["save", "swipe", "undo", "send", "block", "report", "uploadId", "older"];
 
 test("every failed request has its own offline and generic text", () => {
   for (const action of ACTIONS) {

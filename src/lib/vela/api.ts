@@ -14,6 +14,8 @@ import {
   VALUES,
   isUnveiled,
   CHAT_HISTORY_LIMIT,
+  OLDER_PAGE_SIZE,
+  olderPageStart,
   type Me,
   type Message,
   type Orbit,
@@ -202,6 +204,8 @@ const DATA_EXPORT_RULE = { windowSec: 3600, max: 10 };
 const STRIPE_SESSION_RULE = { windowSec: 3600, max: 10 };
 /** Blocks per person: 60 per hour (real use is fine; stops scripts flooding vela_blocks). */
 const BLOCK_RULE = { windowSec: 3600, max: 60 };
+/** "Ältere Nachrichten laden" per person: 30 pages a minute (3000 messages). */
+const OLDER_MESSAGES_RULE = { windowSec: 60, max: 30 };
 /**
  * Atomic burst guards on the rateLimit table. The count queries on
  * vela_messages / vela_reports / vela_swipes read-then-insert, so parallel
@@ -935,6 +939,81 @@ export const sendMessage = createServerFn({ method: "POST" })
       return { error: "Dieses Gespräch ist beendet.", snapshot: await reply() };
     }
     return { error: null, snapshot: await reply() };
+  });
+
+/**
+ * "Ältere Nachrichten laden": the OLDER_PAGE_SIZE messages before the first one
+ * the chat holds (position `before`, whose id is `firstId`). Same rules as the
+ * chat in the snapshot: only a mutual match, only while both profiles are
+ * active and nobody blocked. Only message rows come back, never photos or
+ * veil data (the veil counts stay with the snapshot). If the message at
+ * `before` is no longer `firstId`, the chat changed and the app reloads.
+ */
+export const loadOlderMessages = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { withUser?: string; before?: number; firstId?: string }) => input)
+  .handler(async ({ context, data }): Promise<{ error: string | null; stale?: boolean; from: number; messages: Message[] }> => {
+    const withUser = String(data?.withUser ?? "");
+    const before = Number(data?.before);
+    const firstId = String(data?.firstId ?? "");
+    if (
+      !withUser ||
+      withUser.length > 64 ||
+      withUser === context.userId ||
+      !Number.isInteger(before) ||
+      before < 1 ||
+      before > 10_000_000 ||
+      !/^[A-Za-z0-9_-]{1,64}$/.test(firstId)
+    ) {
+      return { error: "Leer.", from: 0, messages: [] };
+    }
+    const sql = await getSql();
+    const mutual = await sql`
+      select 1 from vela_swipes mine
+      join vela_swipes theirs
+        on theirs.from_user = mine.to_user
+       and theirs.to_user = mine.from_user
+       and theirs.direction = 'spark'
+      where mine.from_user = ${context.userId}
+        and mine.to_user = ${withUser}
+        and mine.direction = 'spark'
+    `;
+    if (mutual.length === 0) return { error: "Noch kein Gespräch.", from: 0, messages: [] };
+    if (!(await canInteract(sql, context.userId, withUser))) {
+      return { error: "Dieses Gespräch ist beendet.", from: 0, messages: [] };
+    }
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:older-messages:${context.userId}`, OLDER_MESSAGES_RULE))) {
+      return { error: "Kurz durchatmen. Gleich geht es weiter.", from: 0, messages: [] };
+    }
+    const from = olderPageStart(before);
+    const [pairA, pairB] = pairOf(context.userId, withUser);
+    // Same order and numbering as the snapshot (rn is 1-based, position rn - 1),
+    // plus the first held message to confirm the page lines up with it.
+    const rows = await sql<{ id: string; from_user: string; body: string; kind: string; created_at: unknown; rn: unknown }>`
+      select id, from_user, body, kind, created_at, rn
+      from (
+        select id, from_user, body, kind, created_at,
+          row_number() over (order by created_at asc, id asc) as rn
+        from vela_messages
+        where pair_a = ${pairA} and pair_b = ${pairB}
+      ) conversation
+      where rn > ${from}::int and rn <= ${before + 1}::int
+      order by rn asc
+      limit ${OLDER_PAGE_SIZE + 1}
+    `;
+    const anchor = rows[rows.length - 1];
+    if (!anchor || Number(anchor.rn) !== before + 1 || anchor.id !== firstId) {
+      return { error: null, stale: true, from: 0, messages: [] };
+    }
+    const messages: Message[] = rows.slice(0, -1).map((message) => ({
+      id: message.id,
+      from: message.from_user === context.userId ? ("me" as const) : ("them" as const),
+      kind: message.kind === "note" ? ("note" as const) : ("message" as const),
+      text: message.body,
+      at: stamp(message.created_at),
+    }));
+    return { error: null, from, messages };
   });
 
 export const setPlus = createServerFn({ method: "POST" })

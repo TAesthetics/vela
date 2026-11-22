@@ -4,7 +4,7 @@
  * Without this, a dropped connection left buttons stuck on "Speichert…" or
  * did nothing visible at all (block, report, swipe, ID upload).
  */
-export type FailedAction = "save" | "swipe" | "undo" | "send" | "block" | "report" | "uploadId";
+export type FailedAction = "save" | "swipe" | "undo" | "send" | "block" | "report" | "uploadId" | "older";
 
 const TEXTS: Record<FailedAction, { offline: string; failed: string }> = {
   save: {
@@ -34,6 +34,10 @@ const TEXTS: Record<FailedAction, { offline: string; failed: string }> = {
   uploadId: {
     offline: "Keine Verbindung. Dein Ausweis ist noch nicht hochgeladen.",
     failed: "Hochladen hat nicht geklappt. Versuch es gleich nochmal.",
+  },
+  older: {
+    offline: "Keine Verbindung. Ältere Nachrichten lassen sich gerade nicht laden.",
+    failed: "Ältere Nachrichten ließen sich nicht laden. Versuch es gleich nochmal.",
   },
 };
 

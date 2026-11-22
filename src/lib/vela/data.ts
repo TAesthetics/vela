@@ -254,3 +254,28 @@ export function mergeMessages(incoming: Thread, old: Thread | undefined): Thread
   if (from <= base || from > base + old.messages.length) return incoming;
   return { ...incoming, messages: [...old.messages.slice(0, from - base), ...incoming.messages], messagesFrom: base };
 }
+
+/** Messages per "Ältere Nachrichten laden" tap. */
+export const OLDER_PAGE_SIZE = 100;
+
+/** Where the page before the first held message starts (0-based position). */
+export function olderPageStart(messagesFrom: number): number {
+  return Math.max(0, messagesFrom - OLDER_PAGE_SIZE);
+}
+
+/**
+ * Puts a page of older messages (positions from .. from + length - 1) in front
+ * of the ones the app holds. It must reach the first held message: an overlap
+ * is trimmed, and a page that would leave a gap or repeat a message already
+ * held (the chat was reloaded meanwhile) is ignored, so the positions behind
+ * unread dots and polling stay exact.
+ */
+export function prependOlder(thread: Thread, page: { from: number; messages: Message[] }): Thread {
+  const base = thread.messagesFrom ?? 0;
+  if (base <= 0 || page.from < 0 || page.from >= base) return thread;
+  if (page.from + page.messages.length < base) return thread;
+  const held = new Set(thread.messages.map((message) => message.id));
+  const older = page.messages.slice(0, base - page.from);
+  if (older.some((message) => held.has(message.id))) return thread;
+  return { ...thread, messages: [...older, ...thread.messages], messagesFrom: page.from };
+}
