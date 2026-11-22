@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import type { Sql } from "@/lib/db";
 import { clientIp, consumeRateLimit, rateLimitKey } from "@/lib/vela/rate-limit.server";
+import { clearSignInAccountLimit } from "@/lib/vela/auth-guard.server";
 
 /** How long an operator-created reset link stays valid. */
 export const RESET_LINK_HOURS = 24;
@@ -83,5 +84,12 @@ export async function resetWithToken(
   `;
   if (updated.length === 0) return { ok: false, error: "Dieses Konto hat kein Passwort." };
   await sql`delete from "session" where "userId" = ${userId}`;
+  // A reset is the way out of the wrong-password brake: sign-in works right away.
+  try {
+    const owner = await sql<{ email: string }>`select email from "user" where id = ${userId}`;
+    if (owner[0]?.email) await clearSignInAccountLimit(sql, owner[0].email);
+  } catch {
+    // The brake ends on its own after 15 minutes.
+  }
   return { ok: true };
 }

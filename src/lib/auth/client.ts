@@ -159,6 +159,8 @@ export async function signIn(
 /** German message for a Better Auth e-mail/password error. */
 export function emailAuthErrorMessage(error: { code?: string; status?: number; message?: string } | null): string {
   const code = error?.code ?? "";
+  if (code === "ACCOUNT_LOCKED")
+    return "Zu viele falsche Passwörter für dieses Konto. Warte 15 Minuten oder nutz „Passwort vergessen?“.";
   if (error?.status === 429) return "Zu viele Versuche. Warte kurz und versuch es dann noch einmal.";
   if (code.startsWith("USER_ALREADY_EXISTS")) return "Mit dieser E-Mail gibt es schon ein Konto. Melde dich an.";
   if (code === "INVALID_EMAIL_OR_PASSWORD" || code === "CREDENTIAL_ACCOUNT_NOT_FOUND")
