@@ -121,6 +121,8 @@ function stamp(value: unknown) {
   return Number.isFinite(at) ? at : Date.now();
 }
 
+/** At most this many waiting sparks are sent as people (VELA+); the count covers all. */
+const INBOUND_LIMIT = 40;
 const REASON_IDS = new Set<string>(REPORT_REASONS.map((reason) => reason.id));
 
 /** True when either person has blocked the other. */
@@ -410,7 +412,30 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
     order by p.created_at desc
     limit 40
   `;
-  const inboundRows = deckRows.filter((row) => asBool(row.sparked_you));
+  // "Wartet schon": everyone who sparked me and is still waiting for my answer,
+  // counted over all of them, not just those among the 40 newest deck cards
+  // (with more than 40 newer profiles, older sparks used to vanish from the
+  // count and from the VELA+ list). Same filters as the deck: active, not yet
+  // swiped by me, no block either way. Uses vela_swipes_to_idx.
+  const inboundRows = await sql<ProfileRow & { total: number | string }>`
+    select p.user_id, p.name, p.age, p.city, p.orbit, p.values, p.prompts, p.plus,
+      count(*) over () as total
+    from vela_swipes s
+    join vela_profiles p on p.user_id = s.from_user
+    where s.to_user = ${userId} and s.direction = 'spark'
+      and p.user_id <> ${userId}
+      and p.status = 'active'
+      and not exists (
+        select 1 from vela_swipes mine where mine.from_user = ${userId} and mine.to_user = p.user_id
+      )
+      and not exists (
+        select 1 from vela_blocks b
+        where (b.from_user = ${userId} and b.to_user = p.user_id)
+           or (b.from_user = p.user_id and b.to_user = ${userId})
+      )
+    order by s.created_at desc
+    limit ${INBOUND_LIMIT}::int
+  `;
   // No photo column here either: photos of matches are loaded below, one by one,
   // only for matches whose veil has actually lifted, so a veiled photo is never
   // even read from the database for this request.
@@ -521,7 +546,7 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
     others: Number(otherRows[0]?.n ?? 0),
     deck: deckRows.map((row) => toPerson(row, plus && asBool(row.sparked_you))),
     inbound: plus ? inboundRows.map((row) => toPerson(row, true)) : [],
-    inboundCount: inboundRows.length,
+    inboundCount: Number(inboundRows[0]?.total ?? 0),
     threads,
   };
 }

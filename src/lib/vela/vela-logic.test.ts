@@ -664,3 +664,25 @@ describe("loading older messages", () => {
   });
 });
 
+
+describe("waiting sparks (Wartet schon)", () => {
+  const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+  const snap = apiSrc.slice(apiSrc.indexOf("async function snapshot("), apiSrc.indexOf("function cleanProfile("));
+  const query = snap.slice(snap.indexOf("const inboundRows"), snap.indexOf("const matchRows"));
+
+  it("are counted over everyone, not only the 40 newest deck cards", () => {
+    assert.ok(!/deckRows\.filter/.test(snap), "inbound must not be derived from the 40-card deck");
+    assert.match(query, /from vela_swipes s\s+join vela_profiles p on p\.user_id = s\.from_user/);
+    assert.match(query, /count\(\*\) over \(\) as total/, "count must cover all waiting sparks, before the limit");
+    assert.match(snap, /inboundCount: Number\(inboundRows\[0\]\?\.total \?\? 0\)/);
+  });
+
+  it("use the same filters as the deck and never load photos", () => {
+    assert.match(query, /s\.to_user = \$\{userId\} and s\.direction = 'spark'/);
+    assert.match(query, /p\.status = 'active'/);
+    assert.match(query, /mine\.from_user = \$\{userId\} and mine\.to_user = p\.user_id/, "already answered sparks drop out");
+    assert.match(query, /b\.from_user = p\.user_id and b\.to_user = \$\{userId\}/, "blocks in both directions");
+    assert.ok(!/p\.photo/.test(query), "the veil: no photos of waiting people");
+    assert.match(snap, /inbound: plus \? inboundRows\.map/, "only VELA+ sees who is waiting");
+  });
+});
