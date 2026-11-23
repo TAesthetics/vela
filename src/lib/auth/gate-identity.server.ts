@@ -4,7 +4,7 @@ import {
   type JWK,
   type JWTVerifyGetKey,
 } from "jose";
-import { env, isWorkspacePreview } from "../env.server.ts";
+import { env, isSelfHosted, isWorkspacePreview } from "../env.server.ts";
 
 export const GATE_IDENTITY_HEADER = "x-grok-identity";
 export const GATE_JWKS_PATH = "/__gate/identity-key";
@@ -26,8 +26,14 @@ export type GateJwks = { keys: JWK[] };
 
 export type JwksFetch = (url: string) => Promise<GateJwks | null>;
 
+/**
+ * Gate sign-in only exists on the Grok platform. A self-hosted VELA (own
+ * Vercel project, Railway) signs in with e-mail + password only, so a forged
+ * or foreign `x-grok-identity` header must never create or take over a
+ * session there (gate identities are linked to existing accounts by e-mail).
+ */
 export function gateIdentityEnabled(): boolean {
-  return env("VITE_AUTH_ENABLED") !== "false";
+  return env("VITE_AUTH_ENABLED") !== "false" && !isSelfHosted();
 }
 
 export function gateTokenAudience(): string {

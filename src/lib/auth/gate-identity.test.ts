@@ -238,6 +238,38 @@ describe("gateIdentityFromHeaders", () => {
     }
   });
 
+  it("ignores even a valid token on a self-hosted deployment", async () => {
+    const key = await makeKey("k-self-hosted");
+    const fetchedFrom: string[] = [];
+    const fetchImpl = async (url: string): Promise<GateJwks> => {
+      fetchedFrom.push(url);
+      return { keys: [key.jwk] };
+    };
+    process.env.GROK_PROJECT_ID = "proj-123";
+    process.env.GROK_GATE_ORIGIN = ISSUER;
+    process.env.VELA_SELF_HOSTED = "1";
+    try {
+      const token = await signToken(key, {
+        sub: "user-1",
+        email: "op@example.com",
+      });
+      const identity = await gateIdentityFromHeaders(
+        new Headers({
+          host: "my-app.grok.me",
+          "x-forwarded-host": "my-app.grok.me",
+          "x-grok-identity": token,
+        }),
+        fetchImpl,
+      );
+      assert.equal(identity, null);
+      assert.deepEqual(fetchedFrom, []);
+    } finally {
+      delete process.env.GROK_PROJECT_ID;
+      delete process.env.GROK_GATE_ORIGIN;
+      delete process.env.VELA_SELF_HOSTED;
+    }
+  });
+
   it("activates on a deployed-shaped request without GROK_GATE_ORIGIN", async () => {
     const key = await makeKey("k-deployed");
     const fetchedFrom: string[] = [];
@@ -381,6 +413,18 @@ describe("gateIdentityEnabled", () => {
   it("is enabled by default with no gate env vars", () => {
     delete process.env.GROK_PROJECT_ID;
     delete process.env.GROK_GATE_ORIGIN;
+    assert.equal(gateIdentityEnabled(), true);
+  });
+
+  it("is disabled on a self-hosted deployment (e-mail + password only)", () => {
+    for (const key of ["VELA_SELF_HOSTED", "RAILWAY_ENVIRONMENT_NAME"]) {
+      process.env[key] = "1";
+      try {
+        assert.equal(gateIdentityEnabled(), false);
+      } finally {
+        delete process.env[key];
+      }
+    }
     assert.equal(gateIdentityEnabled(), true);
   });
 
