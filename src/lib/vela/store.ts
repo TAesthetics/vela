@@ -17,7 +17,7 @@ import {
 } from "@/lib/vela/api";
 import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "@/lib/vela/request-failure";
 import { reportError } from "@/lib/vela/error-reporter";
-import { emptySnapshot, mergeMessages, messageTotal, prependOlder, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
+import { emptySnapshot, keepOlderMessages, mergeMessages, messageTotal, prependOlder, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
 export type SparkResult = "match" | "sent" | "ok" | "limit" | "skip" | "filtered";
 
@@ -48,7 +48,8 @@ type VelaStore = {
   seenCoach: boolean;
   celebrate: Person | null;
   toast: string | null;
-  load: () => Promise<void>;
+  /** Full reload. Keeps loaded older messages unless `fresh` (the chat changed on the server). */
+  load: (options?: { fresh?: boolean }) => Promise<void>;
   /** Pulls new messages, sparks and matches without touching the deck or the profile. */
   sync: () => Promise<void>;
   save: (me: Me) => Promise<string | null>;
@@ -161,6 +162,16 @@ function keepKnown(snapshot: Snapshot, state: Pick<VelaStore, "me" | "threads">)
   return { ...snapshot, me, threads: mergeThreads(snapshot.threads, state.threads) };
 }
 
+/**
+ * A full answer replaces the snapshot, but each long chat comes back as its
+ * latest CHAT_HISTORY_LIMIT messages only: keep the older pages the person
+ * already loaded where they still line up (see keepOlderMessages).
+ */
+function keepOlder(snapshot: Snapshot, current: Thread[]): Snapshot {
+  const previous = new Map(current.map((thread) => [thread.person.id, thread]));
+  return { ...snapshot, threads: snapshot.threads.map((thread) => keepOlderMessages(thread, previous.get(thread.person.id))) };
+}
+
 function apply(snapshot: Snapshot, extra?: Partial<VelaStore>) {
   applied += 1;
   return {
@@ -192,7 +203,7 @@ export const useVela = create<VelaStore>((set, get) => ({
   seenCoach: false,
   celebrate: null,
   toast: null,
-  load: async () => {
+  load: async (options) => {
     let snapshot;
     try {
       snapshot = await loadVela();
@@ -207,7 +218,8 @@ export const useVela = create<VelaStore>((set, get) => ({
       throw err;
     }
     const coach = typeof localStorage !== "undefined" && localStorage.getItem("vela-coach") === "1";
-    set({ ...apply(snapshot), seen: readSeen(), seenCoach: coach });
+    const next = options?.fresh ? snapshot : keepOlder(snapshot, get().threads);
+    set({ ...apply(next), seen: readSeen(), seenCoach: coach });
   },
   sync: async () => {
     if (!get().ready || get().signedOut) return;
@@ -241,7 +253,7 @@ export const useVela = create<VelaStore>((set, get) => ({
       return failed("save", err);
     }
     if (result.error || !result.snapshot) return result.error ?? "Speichern ging schief.";
-    set(apply(result.snapshot));
+    set(apply(keepOlder(result.snapshot, get().threads)));
     return null;
   },
   pass: async (id) => {
@@ -321,7 +333,7 @@ export const useVela = create<VelaStore>((set, get) => ({
     }
     if (result.stale) {
       // The chat changed on the server: load it fresh instead of guessing.
-      await get().load().catch(() => undefined);
+      await get().load({ fresh: true }).catch(() => undefined);
       return;
     }
     if (result.error) {
@@ -339,7 +351,7 @@ export const useVela = create<VelaStore>((set, get) => ({
   unlockPlus: async () => {
     const result = await setPlus();
     const toast = result.error ?? (result.snapshot.plus ? "Vela+ ist an." : "Leg zuerst dein Profil an.");
-    set(apply(result.snapshot, { toast }));
+    set(apply(keepOlder(result.snapshot, get().threads), { toast }));
   },
   checkoutPlus: async () => {
     try {
@@ -378,7 +390,7 @@ export const useVela = create<VelaStore>((set, get) => ({
     } catch (err) {
       return failed("uploadId", err);
     }
-    set(apply(result.snapshot, { toast: result.error ?? "Danke. Wir prüfen deinen Ausweis." }));
+    set(apply(keepOlder(result.snapshot, get().threads), { toast: result.error ?? "Danke. Wir prüfen deinen Ausweis." }));
     return result.error;
   },
   block: async (personId) => {

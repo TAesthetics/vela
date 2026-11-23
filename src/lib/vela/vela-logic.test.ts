@@ -3,7 +3,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { swipeCapHit, SWIPE_CAPS, isUnveiled, mergeMessages, messageTotal, CHAT_HISTORY_LIMIT, OLDER_PAGE_SIZE, olderPageStart, prependOlder, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
+import { swipeCapHit, SWIPE_CAPS, isUnveiled, keepOlderMessages, mergeMessages, messageTotal, CHAT_HISTORY_LIMIT, OLDER_PAGE_SIZE, olderPageStart, prependOlder, resonance, resonanceParts, RESONANCE, VEIL_AFTER, nextQuestion, PROMPT_BANK } from "./data.ts";
 import { isObjectionable, normalizeForFilter, stripInvisible } from "./content-filter.ts";
 import { checkoutDecision } from "./checkout-reuse.ts";
 
@@ -590,6 +590,65 @@ describe("loading older messages", () => {
     assert.equal(window.messagesFrom, 200);
     assert.deepEqual(window.messages.slice(0, 2).map((m) => m.id), ["m200", "m201"]);
     assert.equal(messageTotal(window), 601);
+  });
+
+  it("a full reload keeps the older pages already loaded when the chat still lines up", () => {
+    // 600 messages, the app paged back to 200 and holds m200..m599.
+    const older = prependOlder(thread(ids(300, 600), 300), { from: 200, messages: ids(200, 300).map(msg) });
+    // Pull-to-refresh / save / ID upload / VELA+: the latest 300 come back.
+    const same = keepOlderMessages(thread(ids(300, 600), 300), older);
+    assert.equal(same.messagesFrom, 200);
+    assert.deepEqual(same.messages.map((m) => m.id), ids(200, 600));
+    assert.equal(messageTotal(same), 600);
+    // New messages arrived meanwhile: the window moved on, older pages stay in front.
+    const moved = keepOlderMessages(thread(ids(305, 605), 305), older);
+    assert.equal(moved.messagesFrom, 200);
+    assert.deepEqual(moved.messages.map((m) => m.id), ids(200, 605));
+    assert.equal(messageTotal(moved), 605);
+    // Fresh data (veil counts, photo) comes from the new answer.
+    const unveiled = { ...(thread(ids(300, 600), 300) as object), unveiled: true, mineCount: 3, theirCount: 3 } as never;
+    assert.equal(keepOlderMessages(unveiled, older).unveiled, true);
+  });
+
+  it("a full reload falls back to the fresh window when the chat doesn't line up", () => {
+    const older = prependOlder(thread(ids(300, 600), 300), { from: 200, messages: ids(200, 300).map(msg) });
+    const fresh = thread(ids(300, 600), 300);
+    // A message at a shared position differs (chat changed on the server).
+    const changed = thread([...ids(300, 450), "x", ...ids(451, 600)], 300);
+    assert.equal(keepOlderMessages(changed, older), changed);
+    // Positions shifted by one: every shared id is off.
+    const shifted = thread(ids(301, 601), 300);
+    assert.equal(keepOlderMessages(shifted, older), shifted);
+    // The held copy runs past the fresh end (messages gone on the server).
+    const shorter = thread(ids(300, 590), 300);
+    assert.equal(keepOlderMessages(shorter, older), shorter);
+    // No overlap: the held copy ends before the fresh window (gap).
+    const far = thread(ids(900, 1200), 900);
+    assert.equal(keepOlderMessages(far, older), far);
+    // Nothing older held, a short chat, a new match or an empty chat: fresh as is.
+    assert.equal(keepOlderMessages(fresh, thread(ids(300, 600), 300)), fresh);
+    const short = thread(ids(0, 40), 0);
+    assert.equal(keepOlderMessages(short, older), short);
+    assert.equal(keepOlderMessages(fresh, undefined), fresh);
+    const empty = thread([], 300);
+    assert.equal(keepOlderMessages(empty, older), empty);
+  });
+
+  it("full answers in the store keep older pages, a stale page reloads fresh", () => {
+    const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+    for (const [from, to] of [
+      ["  load: async", "  sync: async"],
+      ["  save: async", "  pass: async"],
+      ["  unlockPlus: async", "  checkoutPlus: async"],
+      ["  uploadId: async", "  block: async"],
+    ]) {
+      const client = storeSrc.slice(storeSrc.indexOf(from), storeSrc.indexOf(to));
+      assert.ok(client.includes("keepOlder(") && client.includes("get().threads"), from);
+    }
+    const older = storeSrc.slice(storeSrc.indexOf("  loadOlder: async"), storeSrc.indexOf("  unlockPlus: async"));
+    assert.ok(older.includes("load({ fresh: true })"), "a chat that changed on the server must not keep its old pages");
+    const load = storeSrc.slice(storeSrc.indexOf("  load: async"), storeSrc.indexOf("  sync: async"));
+    assert.ok(load.includes("options?.fresh ? snapshot"));
   });
 
   it("server reads older messages only under the chat's own rules and without photos", () => {

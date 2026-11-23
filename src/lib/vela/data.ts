@@ -279,3 +279,26 @@ export function prependOlder(thread: Thread, page: { from: number; messages: Mes
   if (older.some((message) => held.has(message.id))) return thread;
   return { ...thread, messages: [...older, ...thread.messages], messagesFrom: page.from };
 }
+
+/**
+ * A full answer (app start, pull-to-refresh, saving the profile, ID upload,
+ * VELA+) sends each long chat as its latest CHAT_HISTORY_LIMIT messages only.
+ * Keeps the older messages the app already loaded ("Ältere Nachrichten laden")
+ * in front of that window, but only when both copies agree: the held copy
+ * starts earlier, reaches into the fresh window, every message they share has
+ * the same id at the same position, and the held copy doesn't run past the
+ * fresh end. Anything else (chat changed on the server, a gap) takes the fresh
+ * window as is, so a chat never shows duplicates, gaps or shifted positions.
+ */
+export function keepOlderMessages(fresh: Thread, held: Thread | undefined): Thread {
+  const from = fresh.messagesFrom ?? 0;
+  if (!held || from <= 0 || fresh.messages.length === 0) return fresh;
+  const base = held.messagesFrom ?? 0;
+  const heldEnd = base + held.messages.length;
+  const freshEnd = from + fresh.messages.length;
+  if (base >= from || heldEnd <= from || heldEnd > freshEnd) return fresh;
+  for (let position = from; position < heldEnd; position += 1) {
+    if (held.messages[position - base].id !== fresh.messages[position - from].id) return fresh;
+  }
+  return { ...fresh, messages: [...held.messages.slice(0, from - base), ...fresh.messages], messagesFrom: base };
+}
