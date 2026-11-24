@@ -20,6 +20,7 @@ import { SafetyMenu } from "@/components/vela/safety";
 import { LegalLinks } from "@/components/vela/legal";
 import { exportMyData } from "@/lib/vela/api";
 import { isNativeApp } from "@/lib/native";
+import { weakPasswordReason } from "@/lib/vela/password-policy";
 import { changeMyPassword, signOutOtherDevices } from "@/lib/auth/client";
 
 export function Signals({
@@ -429,6 +430,8 @@ function ChangePassword() {
     if (next.length > 128) return setMessage("Das neue Passwort ist zu lang (höchstens 128 Zeichen).");
     if (next !== repeat) return setMessage("Die beiden neuen Passwörter sind nicht gleich.");
     if (next === current) return setMessage("Das neue Passwort ist dasselbe wie das alte.");
+    const weak = weakPasswordReason(next);
+    if (weak) return setMessage(weak);
     setBusy(true);
     setMessage("");
     try {

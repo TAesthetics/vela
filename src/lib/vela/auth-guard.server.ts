@@ -1,5 +1,6 @@
 import type { Sql } from "@/lib/db";
 import { clientIp, consumeRateLimit, rateLimitKey, type RateRule } from "./rate-limit.server.ts";
+import { weakPasswordReason } from "./password-policy.ts";
 
 /**
  * Atomic per-IP limits for the Better Auth endpoints, checked in
@@ -125,4 +126,34 @@ export async function withSignInAccountLimit(
 /** Lifts the brake, e.g. after the password was reset with a valid link. */
 export async function clearSignInAccountLimit(sql: Sql, email: string): Promise<void> {
   await sql`update "rateLimit" set count = 0 where key = ${signInAccountKey(email)}`;
+}
+
+/**
+ * 400 when a request sets a new password that is too easy to guess (sign-up,
+ * password change, Better Auth's own reset endpoint), otherwise null. Sign-in
+ * is never checked, so existing passwords keep working. See password-policy.ts.
+ */
+export async function weakPasswordRejected(request: Request): Promise<Response | null> {
+  let path: string;
+  try {
+    path = new URL(request.url).pathname.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+  const signUp = /\/api\/auth\/sign-up\/email$/.test(path);
+  if (!signUp && !/\/api\/auth\/(change-password|reset-password)$/.test(path)) return null;
+  let body: { email?: unknown; password?: unknown; newPassword?: unknown };
+  try {
+    body = (await request.clone().json()) as typeof body;
+  } catch {
+    return null; // Better Auth answers malformed bodies itself
+  }
+  const password = signUp ? body?.password : body?.newPassword;
+  if (typeof password !== "string" || password.length > 128) return null;
+  const reason = weakPasswordReason(password, signUp && typeof body?.email === "string" ? body.email : null);
+  if (!reason) return null;
+  return new Response(JSON.stringify({ code: "PASSWORD_TOO_WEAK", message: reason }), {
+    status: 400,
+    headers: { "content-type": "application/json" },
+  });
 }

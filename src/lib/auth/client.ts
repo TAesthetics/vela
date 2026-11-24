@@ -2,6 +2,7 @@ import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
 import { GROK_PROVIDERS } from "./providers";
 import { isNativeApp } from "../native";
+import { WEAK_PASSWORD_MESSAGE } from "../vela/password-policy";
 
 /**
  * Better Auth client for this React SPA (browser-side).
@@ -166,6 +167,7 @@ export function emailAuthErrorMessage(error: { code?: string; status?: number; m
   if (code === "INVALID_EMAIL_OR_PASSWORD" || code === "CREDENTIAL_ACCOUNT_NOT_FOUND")
     return "E-Mail oder Passwort stimmt nicht.";
   if (code === "PASSWORD_TOO_SHORT") return "Das Passwort braucht mindestens 8 Zeichen.";
+  if (code === "PASSWORD_TOO_WEAK") return error?.message || WEAK_PASSWORD_MESSAGE;
   if (code === "PASSWORD_TOO_LONG") return "Das Passwort ist zu lang (höchstens 128 Zeichen).";
   if (code === "INVALID_EMAIL") return "Bitte gib eine gültige E-Mail-Adresse ein.";
   if (code === "INVALID_PASSWORD") return "Das aktuelle Passwort stimmt nicht.";

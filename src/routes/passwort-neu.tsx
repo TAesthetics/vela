@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { weakPasswordReason } from "@/lib/vela/password-policy";
 import { createFileRoute } from "@tanstack/react-router";
 import { Wordmark } from "@/components/vela/ui";
 import { resetPasswordWithLink } from "@/lib/vela/password-reset";
@@ -31,6 +32,8 @@ function NewPassword() {
     if (busy || !token) return;
     setError(null);
     if (password.length < 8) return setError("Das Passwort braucht mindestens 8 Zeichen.");
+    const weak = weakPasswordReason(password);
+    if (weak) return setError(weak);
     if (password !== repeat) return setError("Die beiden Passwörter stimmen nicht überein.");
     setBusy(true);
     try {

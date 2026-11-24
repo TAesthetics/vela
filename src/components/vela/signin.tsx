@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { weakPasswordReason } from "@/lib/vela/password-policy";
 import {
   GROK_PROVIDERS,
   signInWithEmail,
@@ -32,6 +33,8 @@ export function SignInPanel() {
     setError(null);
     if (mode === "signup") {
       if (password.length < 8) return setError("Das Passwort braucht mindestens 8 Zeichen.");
+      const weak = weakPasswordReason(password, email);
+      if (weak) return setError(weak);
       if (!adult) return setError("Vela ist nur für Erwachsene. Bitte bestätige, dass du mindestens 18 bist.");
     }
     setEmailBusy(true);

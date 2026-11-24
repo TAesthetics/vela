@@ -3,6 +3,7 @@ import { hashPassword } from "better-auth/crypto";
 import type { Sql } from "@/lib/db";
 import { clientIp, consumeRateLimit, rateLimitKey } from "@/lib/vela/rate-limit.server";
 import { clearSignInAccountLimit } from "@/lib/vela/auth-guard.server";
+import { weakPasswordReason } from "@/lib/vela/password-policy";
 
 /** How long an operator-created reset link stays valid. */
 export const RESET_LINK_HOURS = 24;
@@ -59,6 +60,8 @@ export async function resetWithToken(
   if (password.length < 8) return { ok: false, error: "Das Passwort braucht mindestens 8 Zeichen." };
   if (password.length > 128) return { ok: false, error: "Das Passwort darf höchstens 128 Zeichen haben." };
   if (!token || token.length > 200) return { ok: false, error: "Dieser Link ist ungültig." };
+  const weak = weakPasswordReason(password);
+  if (weak) return { ok: false, error: weak };
 
   const allowed = await consumeRateLimit(
     sql,
