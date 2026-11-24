@@ -39,6 +39,8 @@ export const Route = createFileRoute("/api/cron/retention")({
           return Response.json({ ok: true, ran }, { headers: { "cache-control": "no-store" } });
         } catch (err) {
           console.error("[cron/retention]", err instanceof Error ? err.message : err);
+          const { recordServerError } = await import("@/lib/vela/server-errors.server");
+          await recordServerError("cron:retention", err);
           return Response.json({ ok: false }, { status: 500, headers: { "cache-control": "no-store" } });
         }
       },

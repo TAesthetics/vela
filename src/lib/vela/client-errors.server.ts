@@ -28,12 +28,15 @@ function clip(value: unknown, max: number) {
   return typeof value === "string" ? value.slice(0, max) : "";
 }
 
-export function normalizeClientError(input: ClientErrorInput) {
+/** Platforms a crash report from the app may claim ("server" is only set by the server itself). */
+const CLIENT_PLATFORMS: readonly string[] = ["web", "ios", "android"];
+
+export function normalizeClientError(input: ClientErrorInput, platforms: readonly string[] = CLIENT_PLATFORMS) {
   const message = scrub(clip(input.message, 500)).slice(0, 300).trim();
   if (!message) return null;
   const stack = scrub(clip(input.stack, 4000)).slice(0, 2000);
   const path = stripQueries(clip(input.path, 300)).slice(0, 200);
-  const platform = ["web", "ios", "android"].includes(String(input.platform)) ? String(input.platform) : "web";
+  const platform = platforms.includes(String(input.platform)) ? String(input.platform) : "web";
   const release = clip(input.release, 40).replace(/[^\w.-]/g, "");
   // Group by message + top stack frame without line/column noise.
   const topFrame = stack.split("\n").find((line) => line.includes("/")) ?? "";
@@ -44,9 +47,16 @@ export function normalizeClientError(input: ClientErrorInput) {
   return { fingerprint, message, stack, path, platform, release };
 }
 
+export type ErrorRow = NonNullable<ReturnType<typeof normalizeClientError>>;
+
 export async function recordClientError(sql: Sql, input: ClientErrorInput) {
   const row = normalizeClientError(input);
   if (!row) return false;
+  return saveErrorRow(sql, row);
+}
+
+/** Adds one occurrence to its group (or a new group while under MAX_GROUPS). */
+export async function saveErrorRow(sql: Sql, row: ErrorRow) {
   const existing = await sql<{ fingerprint: string }>`
     update vela_client_errors
     set count = count + 1, last_seen = now(), path = ${row.path}, release = ${row.release}

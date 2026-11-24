@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { errorMonitor } from "@/lib/vela/error-monitor";
 
 /** Operator tools for age review. Access rules: see admin-access.server.ts. */
 async function isAdmin(sql: Sql, userId: string) {
@@ -159,7 +160,7 @@ async function load(sql: Sql, adminUserId: string): Promise<AdminData> {
 }
 
 export const loadAdmin = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }): Promise<AdminData> => {
     const sql = await getSql();
     if (!(await isAdmin(sql, context.userId))) return { allowed: false };
@@ -168,7 +169,7 @@ export const loadAdmin = createServerFn({ method: "GET" })
 
 /** Approve → lifts the age suspension (not a rule ban); reject → stays suspended. Either way the ID image is deleted now. */
 export const decideIdCheck = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { id?: string; approve?: boolean }) => input)
   .handler(async ({ context, data }): Promise<AdminData> => {
     const sql = await getSql();
@@ -198,7 +199,7 @@ export const decideIdCheck = createServerFn({ method: "POST" })
  * liftable by ID upload) or ban (rule violation, only the operator lifts it).
  */
 export const resolveReport = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { id?: string; suspend?: boolean; ban?: boolean }) => input)
   .handler(async ({ context, data }): Promise<AdminData> => {
     const sql = await getSql();
@@ -222,7 +223,7 @@ export const resolveReport = createServerFn({ method: "POST" })
 
 /** Lift a rule ban. An age suspension that is still open takes over again. */
 export const liftRuleBan = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { userId?: string }) => input)
   .handler(async ({ context, data }): Promise<AdminData> => {
     const sql = await getSql();
@@ -252,7 +253,7 @@ export type AdminResetLink = { ok: true; link: string; expiresAt: string } | { o
  * e-mail address (no mail service, so the operator sends the link by hand).
  */
 export const createPasswordResetLink = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { email?: string }) => input)
   .handler(async ({ context, data }): Promise<AdminResetLink> => {
     const sql = await getSql();

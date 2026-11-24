@@ -654,7 +654,7 @@ describe("loading older messages", () => {
   it("server reads older messages only under the chat's own rules and without photos", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const fn = apiSrc.slice(apiSrc.indexOf("export const loadOlderMessages"), apiSrc.indexOf("export const setPlus"));
-    assert.ok(fn.includes(".middleware([authMiddleware])"));
+    assert.ok(fn.includes(".middleware([authMiddleware, errorMonitor])"));
     assert.ok(fn.includes("theirs.direction = 'spark'") && fn.includes("mine.direction = 'spark'"), "mutual match only");
     assert.ok(fn.includes("canInteract(sql, context.userId, withUser)"), "active profiles, nobody blocked");
     assert.ok(fn.includes("consumeRateLimit(sql, `vela:older-messages:"), "rate limited");

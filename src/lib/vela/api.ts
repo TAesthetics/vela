@@ -3,6 +3,8 @@ import { FILTER_MESSAGE, isObjectionable, stripInvisible } from "./content-filte
 import { cleanJpegDataUrl, stripJpegMetadata } from "./jpeg";
 import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { errorMonitor } from "@/lib/vela/error-monitor";
+import { userFacingError } from "@/lib/vela/user-facing-error";
 import {
   FREE_SWIPES,
   SWIPE_CAPS,
@@ -150,6 +152,12 @@ async function plusAvailable() {
 function billingServer() {
   // Server-only module (Stripe key), loaded lazily so it never reaches the client bundle.
   return import("@/lib/vela/stripe.server");
+}
+
+/** Records a swallowed server error on /admin/age (lazy: server-only module). */
+async function recordServerError(source: string, err: unknown) {
+  const monitor = await import("@/lib/vela/server-errors.server");
+  await monitor.recordServerError(source, err);
 }
 
 async function billingSnapshot(sql: Sql, userId: string): Promise<Billing> {
@@ -611,7 +619,7 @@ function cleanProfile(input: unknown): { me: Me } | { error: string } {
 }
 
 export const loadVela = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }) => {
     const sql = await getSql();
     // Retention fallback on load, at most once per 10 minutes across all
@@ -626,7 +634,7 @@ export const loadVela = createServerFn({ method: "GET" })
  * stays cheap.
  */
 export const syncVela = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { known?: Record<string, string>; held?: Record<string, string> } | undefined) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
@@ -641,7 +649,7 @@ export const syncVela = createServerFn({ method: "GET" })
   });
 
 export const saveProfile = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: unknown) => input)
   .handler(async ({ context, data }) => {
     const parsed = cleanProfile(data);
@@ -705,7 +713,7 @@ export const saveProfile = createServerFn({ method: "POST" })
   });
 
 export const swipe = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator(
     (input: {
       toUser?: string;
@@ -846,7 +854,7 @@ export const swipe = createServerFn({ method: "POST" })
   });
 
 export const undoPass = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { known?: Record<string, string>; held?: Record<string, string> } | undefined) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
@@ -884,7 +892,7 @@ export const undoPass = createServerFn({ method: "POST" })
   });
 
 export const sendMessage = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator(
     (input: { toUser?: string; text?: string; known?: Record<string, string>; held?: Record<string, string> }) => input,
   )
@@ -975,7 +983,7 @@ export const sendMessage = createServerFn({ method: "POST" })
  * `before` is no longer `firstId`, the chat changed and the app reloads.
  */
 export const loadOlderMessages = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { withUser?: string; before?: number; firstId?: string }) => input)
   .handler(async ({ context, data }): Promise<{ error: string | null; stale?: boolean; from: number; messages: Message[] }> => {
     const withUser = String(data?.withUser ?? "");
@@ -1042,7 +1050,7 @@ export const loadOlderMessages = createServerFn({ method: "POST" })
   });
 
 export const setPlus = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }) => {
     const sql = await getSql();
     // No checkout yet: Plus can only be switched on in the workspace preview.
@@ -1055,7 +1063,7 @@ export const setPlus = createServerFn({ method: "POST" })
 
 /** VELA+: start Stripe Checkout (card, Apple Pay, Google Pay). Returns the URL to open. */
 export const startPlusCheckout = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }): Promise<{ url: string | null; error: string | null }> => {
     const sql = await getSql();
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
@@ -1082,14 +1090,15 @@ export const startPlusCheckout = createServerFn({ method: "POST" })
         const url = await stripe.createCheckout(tx, { id: context.userId, email: users[0]?.email ?? null }, origin);
         return { url, error: null };
       });
-    } catch {
+    } catch (err) {
+      await recordServerError("stripe:checkout", err);
       return { url: null, error: "Die Bezahlseite ließ sich nicht öffnen. Versuch es gleich nochmal." };
     }
   });
 
 /** VELA+: Stripe billing portal to cancel, change the payment method or get invoices. */
 export const openPlusPortal = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }): Promise<{ url: string | null; error: string | null }> => {
     const sql = await getSql();
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
@@ -1102,7 +1111,8 @@ export const openPlusPortal = createServerFn({ method: "POST" })
     if (!current?.stripe_customer_id) return { url: null, error: "Du hast noch kein Abo." };
     try {
       return { url: await stripe.createPortal(current.stripe_customer_id, await appOrigin()), error: null };
-    } catch {
+    } catch (err) {
+      await recordServerError("stripe:portal", err);
       return { url: null, error: "Die Abo-Verwaltung ließ sich nicht öffnen. Versuch es gleich nochmal." };
     }
   });
@@ -1137,7 +1147,7 @@ async function userExists(sql: Sql, userId: string): Promise<boolean> {
 }
 
 export const blockUser = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { toUser?: string; known?: Record<string, string>; held?: Record<string, string> }) => input)
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
@@ -1168,7 +1178,7 @@ export const blockUser = createServerFn({ method: "POST" })
   });
 
 export const reportUser = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator(
     (input: {
       toUser?: string;
@@ -1243,7 +1253,7 @@ export const reportUser = createServerFn({ method: "POST" })
   });
 
 export const deleteProfile = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }) => {
     const sql = await getSql();
     const id = context.userId;
@@ -1257,7 +1267,8 @@ export const deleteProfile = createServerFn({ method: "POST" })
       } catch (err) {
         const gone = err instanceof Error && /No such subscription|canceled/i.test(err.message);
         if (!gone) {
-          throw new Error(
+          await recordServerError("stripe:cancel-on-delete", err);
+          throw userFacingError(
             "Dein VELA+ Abo ließ sich gerade nicht beenden. Kündige es unter „Abo verwalten“ und lösch dein Konto dann nochmal.",
           );
         }
@@ -1318,13 +1329,13 @@ export const deleteProfile = createServerFn({ method: "POST" })
  * No password hash, session tokens or ID images.
  */
 export const exportMyData = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }) => {
     const sql = await getSql();
     const id = context.userId;
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
     if (!(await consumeRateLimit(sql, `vela:data-export:${id}`, DATA_EXPORT_RULE))) {
-      throw new Error("Du hast gerade schon mehrmals exportiert. Versuch es in ein paar Minuten noch einmal.");
+      throw userFacingError("Du hast gerade schon mehrmals exportiert. Versuch es in ein paar Minuten noch einmal.");
     }
     const safe = async <T>(query: () => Promise<T[]>): Promise<T[]> => {
       try {
@@ -1403,7 +1414,7 @@ const ID_MAX_BYTES = 1_500_000;
  * visible only to the operator, deleted once they decide or after 30 days.
  */
 export const uploadIdDocument = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
+  .middleware([authMiddleware, errorMonitor])
   .validator((input: { image?: string }) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();

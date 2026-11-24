@@ -30,6 +30,8 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           await handleEvent(await getSql(), event);
         } catch (err) {
           console.error("[stripe webhook]", event?.type, err instanceof Error ? err.message : err);
+          const { recordServerError } = await import("@/lib/vela/server-errors.server");
+          await recordServerError(`webhook:stripe:${String(event?.type ?? "unknown")}`, err);
           // 500 makes Stripe retry later.
           return new Response("Webhook handler failed", { status: 500 });
         }
