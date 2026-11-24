@@ -15,6 +15,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Sql } from "@/lib/db";
 import { env } from "@/lib/env.server";
 import { checkoutDecision } from "./checkout-reuse";
+import { storeRowActive } from "./store-entitlement";
 import { isActiveStatus, subscriptionUpdate } from "./subscription-state";
 
 export const PLUS_PRICE_CENTS = 1000;
@@ -81,11 +82,37 @@ export async function billingOf(sql: Sql, userId: string): Promise<BillingRow | 
   return rows[0];
 }
 
-/** Mirror the subscription state onto the profile flag every Plus check reads. */
+export type StorePurchaseRow = {
+  store: string | null;
+  product_id: string | null;
+  expires_at: string | Date | null;
+  active: boolean | string;
+};
+
+/** VELA+ bought in the iOS/Android app (RevenueCat), if any. */
+export async function storePurchaseOf(sql: Sql, userId: string): Promise<StorePurchaseRow | undefined> {
+  try {
+    const rows = await sql<StorePurchaseRow>`
+      select store, product_id, expires_at, active from vela_store_purchases where user_id = ${userId}
+    `;
+    return rows[0];
+  } catch {
+    // Table not migrated yet: no store purchases.
+    return undefined;
+  }
+}
+
+/**
+ * Mirror the subscription state onto the profile flag every Plus check reads.
+ * Plus is on while either the Stripe subscription (web) or the in-app
+ * purchase (App Store / Google Play) is active, so ending one never takes
+ * away Plus that the other still pays for.
+ */
 export async function syncPlus(sql: Sql, userId: string): Promise<void> {
   const row = await billingOf(sql, userId);
-  if (!row) return;
-  const plus = isActiveStatus(row.status);
+  const store = await storePurchaseOf(sql, userId);
+  if (!row && !store) return;
+  const plus = isActiveStatus(row?.status) || storeRowActive(store);
   await sql`update vela_profiles set plus = ${plus} where user_id = ${userId}`;
 }
 

@@ -21,6 +21,7 @@ import { LegalLinks } from "@/components/vela/legal";
 import { exportMyData } from "@/lib/vela/api";
 import { isNativeApp } from "@/lib/native";
 import { weakPasswordReason } from "@/lib/vela/password-policy";
+import { isActiveStatus } from "@/lib/vela/subscription-state";
 import { changeMyPassword, signOutOtherDevices } from "@/lib/auth/client";
 
 export function Signals({
@@ -560,6 +561,7 @@ function SignOutOtherDevices() {
 }
 
 export function MeScreen({ onPlus }: { onPlus: () => void }) {
+  const storePlus = useVela((state) => state.billing.store ?? null);
   const me = useVela((state) => state.me);
   const plus = useVela((state) => state.plus);
   const left = useVela((state) => state.swipesLeft);
@@ -741,9 +743,19 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
         Löscht dein Profil, deinen Login, deine Swipes und die Nachrichten, an denen du beteiligt bist. Meldungen
         bewahren wir zum Schutz anderer bis zu 12 Monate auf.
       </p>
+      {storePlus && (
+        <p className="mt-2 text-sm text-ember">
+          Dein Vela+ läuft über {storeLabel(storePlus)}. Kündige es dort, sonst läuft die Zahlung nach dem Löschen
+          weiter.
+        </p>
+      )}
       <LegalLinks className="mt-8" />
     </div>
   );
+}
+
+function storeLabel(store: "app_store" | "play_store"): string {
+  return store === "app_store" ? "den App Store" : "Google Play";
 }
 
 export function Plus({ onBack }: { onBack: () => void }) {
@@ -762,6 +774,11 @@ export function Plus({ onBack }: { onBack: () => void }) {
   const periodEnd = billing.periodEnd
     ? new Intl.DateTimeFormat("de-AT", { day: "numeric", month: "long", year: "numeric" }).format(
         new Date(billing.periodEnd),
+      )
+    : null;
+  const storeUntil = billing.storeUntil
+    ? new Intl.DateTimeFormat("de-AT", { day: "numeric", month: "long", year: "numeric" }).format(
+        new Date(billing.storeUntil),
       )
     : null;
   const run = async (action: () => Promise<string | null>) => {
@@ -815,7 +832,12 @@ export function Plus({ onBack }: { onBack: () => void }) {
           {plus ? (
             <>
               <p className="rounded-full bg-surface py-3 text-center text-sm text-paper">Vela+ ist aktiv</p>
-              {periodEnd && (
+              {billing.store && !isActiveStatus(billing.status) ? (
+                <p className="text-center text-sm text-muted">
+                  In der App über {storeLabel(billing.store)} gekauft
+                  {storeUntil ? `, läuft bis mindestens ${storeUntil}` : ""}. Verwalten und kündigen geht dort.
+                </p>
+              ) : periodEnd && (
                 <p className="text-center text-sm text-muted">
                   {billing.cancelAtPeriodEnd ? `Gekündigt, läuft bis ${periodEnd}.` : `Verlängert sich am ${periodEnd}.`}
                   {billing.status === "past_due" ? " Die letzte Zahlung hat nicht geklappt." : ""}

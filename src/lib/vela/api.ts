@@ -164,12 +164,19 @@ async function billingSnapshot(sql: Sql, userId: string): Promise<Billing> {
   const stripe = await billingServer();
   const row = await stripe.billingOf(sql, userId);
   const end = row?.current_period_end ? new Date(row.current_period_end).getTime() : null;
+  const { storeRowActive } = await import("@/lib/vela/store-entitlement");
+  const purchase = await stripe.storePurchaseOf(sql, userId);
+  const storeActive = storeRowActive(purchase);
+  const storeEnd = purchase?.expires_at ? new Date(purchase.expires_at).getTime() : null;
   return {
     configured: stripe.stripeConfigured(),
     customer: Boolean(row?.stripe_customer_id),
     status: row?.status ?? null,
     periodEnd: end && Number.isFinite(end) ? end : null,
     cancelAtPeriodEnd: row ? asBool(row.cancel_at_period_end) : false,
+    store:
+      storeActive && (purchase?.store === "app_store" || purchase?.store === "play_store") ? purchase.store : null,
+    storeUntil: storeActive && storeEnd && Number.isFinite(storeEnd) ? storeEnd : null,
   };
 }
 
@@ -1077,6 +1084,11 @@ export const startPlusCheckout = createServerFn({ method: "POST" })
     if (profile.length === 0) return { url: null, error: "Leg zuerst dein Profil an." };
     const current = await stripe.billingOf(sql, context.userId);
     if (current && stripe.isActiveStatus(current.status)) return { url: null, error: "Vela+ ist schon aktiv." };
+    // Bought in the iOS/Android app: no second, parallel subscription on the web.
+    const { storeRowActive } = await import("@/lib/vela/store-entitlement");
+    if (storeRowActive(await stripe.storePurchaseOf(sql, context.userId))) {
+      return { url: null, error: "Vela+ ist schon aktiv (in der App gekauft)." };
+    }
     const users = await sql<{ email: string | null }>`select email from "user" where id = ${context.userId}`;
     const origin = await appOrigin();
     try {
@@ -1295,6 +1307,7 @@ export const deleteProfile = createServerFn({ method: "POST" })
       // Same lock as saveProfile, so a parallel first save can't slip in between.
       await tx`select pg_advisory_xact_lock(hashtext(${`vela:profile:${id}`}))`;
       await tx`delete from vela_subscriptions where user_id = ${id}`;
+      await tx`delete from vela_store_purchases where user_id = ${id}`;
       await tx`delete from vela_checkout_sessions where user_id = ${id}`;
       // An open age suspension must not be dodged by deleting and signing in
       // again: keep only a keyed hash of the login identity (max. 12 months).
@@ -1371,6 +1384,12 @@ export const exportMyData = createServerFn({ method: "POST" })
         from vela_subscriptions where user_id = ${id}
       `,
     );
+    const storePurchase = await safe(
+      () => sql`
+        select store, product_id, expires_at, active, updated_at
+        from vela_store_purchases where user_id = ${id}
+      `,
+    );
     const ageChecks = await safe(
       () =>
         sql`select source, action, created_at from vela_age_flags where user_id = ${id} order by created_at`,
@@ -1396,6 +1415,7 @@ export const exportMyData = createServerFn({ method: "POST" })
         blocks,
         reportsFiled: reports,
         subscription: subscription[0] ?? null,
+        appStorePurchase: storePurchase[0] ?? null,
         ageReview: ageChecks,
         idChecks,
         sessions,

@@ -60,7 +60,7 @@ export type IdCheckStatus = "none" | "pending" | "approved" | "rejected" | "expi
 /** Set when the signed-in person is suspended for a suspected age < 18. */
 export type Suspension = { reason: "age" | "ban"; idCheck: IdCheckStatus };
 
-/** VELA+ subscription state (Stripe). */
+/** VELA+ subscription state (Stripe on the web, App Store / Google Play in the apps). */
 export type Billing = {
   /** False while STRIPE_SECRET_KEY is missing: "Zahlungen sind noch nicht eingerichtet". */
   configured: boolean;
@@ -70,6 +70,10 @@ export type Billing = {
   /** Epoch ms of the end of the paid period. */
   periodEnd: number | null;
   cancelAtPeriodEnd: boolean;
+  /** Set while VELA+ bought in the iOS/Android app is active (managed in that store). */
+  store?: "app_store" | "play_store" | null;
+  /** Epoch ms when that in-app purchase runs out (renews before, unless cancelled). */
+  storeUntil?: number | null;
 };
 
 export const PLUS_PRICE_LABEL = "10 €";

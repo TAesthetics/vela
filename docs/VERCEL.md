@@ -82,6 +82,28 @@ Webhook (Stripe → Entwickler → Webhooks → Endpunkt hinzufügen):
 **Einstellungen → Billing → Kundenportal** aktivieren (Kündigen erlauben, „zum Ende des
 Abrechnungszeitraums“).
 
+### Vela+ in der iOS-/Android-App (RevenueCat, vorbereitet)
+
+Der Server kann Käufe aus App Store und Google Play schon annehmen; solange die
+Variablen fehlen, antwortet `/api/revenuecat/webhook` mit 400 und nichts ändert sich.
+Plus gilt, solange Stripe **oder** der In-App-Kauf aktiv ist. Die App selbst braucht
+noch das RevenueCat-SDK mit `Purchases.logIn(<VELA-Konto-ID>)` und einen Kaufknopf.
+
+| Variable | Wert |
+| --- | --- |
+| `REVENUECAT_WEBHOOK_AUTH` | frei gewählter, langer Zufallswert; derselbe im RevenueCat-Webhook als „Authorization header“ |
+| `REVENUECAT_SECRET_KEY` | RevenueCat → Projekt → API-Schlüssel → geheimer Schlüssel (`sk_…`) |
+| `REVENUECAT_WEBHOOK_SECRET` | optional: HMAC-Signatur-Geheimnis des Webhooks |
+| `REVENUECAT_ENTITLEMENT` | optional, Kennung der Berechtigung; Standard `plus` |
+
+Webhook (RevenueCat → Integrationen → Webhooks): `https://<deine-domain>/api/revenuecat/webhook`,
+Produktion und Sandbox (Apple prüft Käufe in der Sandbox). Jedes Ereignis liest den Stand
+frisch bei RevenueCat nach, Reihenfolge und Doppelte sind egal. Gespeichert wird nur
+Store, Produkt, Ablaufdatum und aktiv ja/nein (Tabelle `vela_store_purchases`), gelöscht
+mit dem Konto. In-App-Abos kann VELA nicht selbst kündigen; die App weist beim
+Konto-Löschen darauf hin.
+Vor dem Einschalten: Datenschutzerklärung um RevenueCat (und Apple/Google als Zahlungsabwickler) ergänzen.
+
 ## 7. Täglicher Retention-Cron (DSGVO)
 
 Jeden Tag um 03:15 UTC ruft Vercel `GET /api/cron/retention` auf und löscht abgelaufene
