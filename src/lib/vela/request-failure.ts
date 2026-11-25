@@ -4,7 +4,7 @@
  * Without this, a dropped connection left buttons stuck on "Speichert…" or
  * did nothing visible at all (block, report, swipe, ID upload).
  */
-export type FailedAction = "save" | "swipe" | "undo" | "send" | "block" | "report" | "uploadId" | "older";
+export type FailedAction = "save" | "swipe" | "undo" | "send" | "block" | "report" | "uploadId" | "older" | "plus";
 
 const TEXTS: Record<FailedAction, { offline: string; failed: string }> = {
   save: {
@@ -38,6 +38,10 @@ const TEXTS: Record<FailedAction, { offline: string; failed: string }> = {
   older: {
     offline: "Keine Verbindung. Ältere Nachrichten lassen sich gerade nicht laden.",
     failed: "Ältere Nachrichten ließen sich nicht laden. Versuch es gleich nochmal.",
+  },
+  plus: {
+    offline: "Keine Verbindung. Vela+ lässt sich gerade nicht freischalten.",
+    failed: "Freischalten hat nicht geklappt. Versuch es gleich nochmal.",
   },
 };
 
@@ -84,4 +88,16 @@ export const LOAD_LIMITED_TEXT = "Vela wurde gerade sehr oft neu geladen. Warte 
 /** True for the server's "reloaded too often" answer (message survives serialization). */
 export function isLoadLimited(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { message?: unknown }).message === LOAD_LIMITED_TEXT;
+}
+
+/**
+ * A swipe, message, undo, block, report, Vela+ or ID upload was refused
+ * because this login sent far more of them within a minute than a person can
+ * (ACTION_RULE in api.ts). Nothing was stored; shown as is, never reported.
+ */
+export const ACTION_LIMITED_TEXT = "Gerade kam sehr viel auf einmal an. Warte eine Minute und versuch es dann nochmal.";
+
+/** True for the server's "too many actions" answer (message survives serialization). */
+export function isActionLimited(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { message?: unknown }).message === ACTION_LIMITED_TEXT;
 }

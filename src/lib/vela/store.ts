@@ -15,7 +15,7 @@ import {
   syncVela,
   undoPass,
 } from "@/lib/vela/api";
-import { LOAD_LIMITED_TEXT, SIGNED_OUT_TEXT, failureText, isLoadLimited, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "@/lib/vela/request-failure";
+import { ACTION_LIMITED_TEXT, LOAD_LIMITED_TEXT, SIGNED_OUT_TEXT, failureText, isActionLimited, isLoadLimited, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "@/lib/vela/request-failure";
 import { reportError } from "@/lib/vela/error-reporter";
 import { emptySnapshot, keepOlderMessages, mergeMessages, messageTotal, prependOlder, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
@@ -116,6 +116,9 @@ function failed(action: FailedAction, err: unknown) {
     endSession();
     return SIGNED_OUT_TEXT;
   }
+  // Server-side action limit (far more taps a minute than a person makes):
+  // nothing was stored, say so plainly and don't report it as a crash.
+  if (isActionLimited(err)) return ACTION_LIMITED_TEXT;
   const offline = isOffline();
   if (!offline) reportError(err);
   return failureText(action, offline);
@@ -358,7 +361,13 @@ export const useVela = create<VelaStore>((set, get) => ({
     });
   },
   unlockPlus: async () => {
-    const result = await setPlus();
+    let result;
+    try {
+      result = await setPlus();
+    } catch (err) {
+      set({ toast: failed("plus", err) });
+      return;
+    }
     const toast = result.error ?? (result.snapshot.plus ? "Vela+ ist an." : "Leg zuerst dein Profil an.");
     set(apply(keepOlder(result.snapshot, get().threads), { toast }));
   },

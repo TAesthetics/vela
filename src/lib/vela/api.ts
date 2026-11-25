@@ -5,7 +5,7 @@ import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { errorMonitor } from "@/lib/vela/error-monitor";
 import { userFacingError } from "@/lib/vela/user-facing-error";
-import { LOAD_LIMITED_TEXT } from "@/lib/vela/request-failure";
+import { ACTION_LIMITED_TEXT, LOAD_LIMITED_TEXT } from "@/lib/vela/request-failure";
 import {
   FREE_SWIPES,
   SWIPE_CAPS,
@@ -234,6 +234,25 @@ const OLDER_MESSAGES_RULE = { windowSec: 60, max: 30 };
  */
 const LOAD_RULE = { windowSec: 60, max: 30 };
 const SYNC_RULE = { windowSec: 60, max: 90 };
+/**
+ * Every other call that answers with the state counts too, first thing in the
+ * handler, so the two limits above can't be sidestepped by calling an action
+ * with empty or invalid input (it still answered with a snapshot, unlimited).
+ * Light answers (swipe, undo, message, block, report) share ACTION_RULE: real
+ * use tops out around 60 swipes plus 20 messages a minute. Full answers
+ * (Vela+ unlock, ID upload) share the full-load budget (LOAD_RULE).
+ */
+const ACTION_RULE = { windowSec: 60, max: 120 };
+
+/** Throws ACTION_LIMITED_TEXT (nothing done, nothing queried) when over the limit. */
+async function limitAction(sql: Sql, userId: string, kind: "light" | "full"): Promise<void> {
+  const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+  const ok =
+    kind === "full"
+      ? await consumeRateLimit(sql, `vela:load:${userId}`, LOAD_RULE)
+      : await consumeRateLimit(sql, `vela:action:${userId}`, ACTION_RULE);
+  if (!ok) throw userFacingError(ACTION_LIMITED_TEXT);
+}
 /**
  * Atomic burst guards on the rateLimit table. The count queries on
  * vela_messages / vela_reports / vela_swipes read-then-insert, so parallel
@@ -757,6 +776,7 @@ export const swipe = createServerFn({ method: "POST" })
     const note = stripInvisible(String(data?.note ?? "")).trim().slice(0, 240);
     const promptId = String(data?.promptId ?? "");
     const sql = await getSql();
+    await limitAction(sql, context.userId, "light");
     // Answer like a poll (deck stays complete): the app keeps its own portrait
     // and the photos/messages it already holds, so a swipe stays small.
     const reply = () =>
@@ -885,6 +905,7 @@ export const undoPass = createServerFn({ method: "POST" })
   .validator((input: { known?: Record<string, string>; held?: Record<string, string> } | undefined) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
+    await limitAction(sql, context.userId, "light");
     const reply = () =>
       snapshot(sql, context.userId, {
         poll: true,
@@ -927,6 +948,7 @@ export const sendMessage = createServerFn({ method: "POST" })
     const toUser = String(data?.toUser ?? "");
     const text = stripInvisible(String(data?.text ?? "")).trim().slice(0, 500);
     const sql = await getSql();
+    await limitAction(sql, context.userId, "light");
     // Answer like a poll: the app keeps its own portrait and sends what it
     // already holds, so a sent message doesn't pull every unveiled photo again.
     const reply = () =>
@@ -1080,6 +1102,7 @@ export const setPlus = createServerFn({ method: "POST" })
   .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }) => {
     const sql = await getSql();
+    await limitAction(sql, context.userId, "full");
     // No checkout yet: Plus can only be switched on in the workspace preview.
     if (!(await plusAvailable())) {
       return { error: "Plus kommt bald.", snapshot: await snapshot(sql, context.userId) };
@@ -1184,6 +1207,7 @@ export const blockUser = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const toUser = String(data?.toUser ?? "");
     const sql = await getSql();
+    await limitAction(sql, context.userId, "light");
     // Light answer like a poll (see swipe): the app keeps what it already has.
     const reply = () =>
       snapshot(sql, context.userId, {
@@ -1225,6 +1249,7 @@ export const reportUser = createServerFn({ method: "POST" })
     const reason = String(data?.reason ?? "");
     const details = stripInvisible(String(data?.details ?? "")).trim().slice(0, 1000);
     const sql = await getSql();
+    await limitAction(sql, context.userId, "light");
     // Light answer like a poll (see swipe): the app keeps what it already has.
     const reply = () =>
       snapshot(sql, context.userId, {
@@ -1458,6 +1483,7 @@ export const uploadIdDocument = createServerFn({ method: "POST" })
   .validator((input: { image?: string }) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
+    await limitAction(sql, context.userId, "full");
     const status = await statusOf(sql, context.userId);
     if (status === "active") {
       return { error: "Dein Konto ist nicht gesperrt.", snapshot: await snapshot(sql, context.userId) };

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LOAD_LIMITED_TEXT, SIGNED_OUT_TEXT, failureText, isLoadLimited, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "./request-failure.ts";
+import { ACTION_LIMITED_TEXT, LOAD_LIMITED_TEXT, SIGNED_OUT_TEXT, failureText, isActionLimited, isLoadLimited, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "./request-failure.ts";
 
-const ACTIONS: FailedAction[] = ["save", "swipe", "undo", "send", "block", "report", "uploadId", "older"];
+const ACTIONS: FailedAction[] = ["save", "swipe", "undo", "send", "block", "report", "uploadId", "older", "plus"];
 
 test("every failed request has its own offline and generic text", () => {
   for (const action of ACTIONS) {
@@ -57,4 +57,16 @@ test("isLoadLimited only matches the server's reload-limit answer", () => {
   assert.equal(isLoadLimited(LOAD_LIMITED_TEXT), false);
   assert.equal(isLoadLimited(null), false);
   assert.ok(!LOAD_LIMITED_TEXT.startsWith("Keine Verbindung."), "not an offline text");
+});
+
+test("isActionLimited only matches the server's action-limit answer", () => {
+  assert.equal(isActionLimited(new Error(ACTION_LIMITED_TEXT)), true);
+  assert.equal(isActionLimited({ message: ACTION_LIMITED_TEXT }), true);
+  assert.equal(isActionLimited(new Error(LOAD_LIMITED_TEXT)), false);
+  assert.equal(isActionLimited(new Error("Unauthorized")), false);
+  assert.equal(isActionLimited(new Error("Failed to fetch")), false);
+  assert.equal(isActionLimited(ACTION_LIMITED_TEXT), false);
+  assert.equal(isActionLimited(undefined), false);
+  assert.ok(!ACTION_LIMITED_TEXT.startsWith("Keine Verbindung."), "not an offline text");
+  assert.notEqual(ACTION_LIMITED_TEXT, LOAD_LIMITED_TEXT);
 });

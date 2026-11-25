@@ -82,6 +82,40 @@ describe("veil", () => {
     assert.ok(loadFn.indexOf("isLoadLimited(err)") < loadFn.indexOf("reportError(err)"), "limit is not reported as a crash");
   });
 
+  it("no server function answers with a snapshot before a per-person limit", () => {
+    // The load/poll limits are worthless if another call (e.g. a swipe with an
+    // empty target) still answers with the whole state, unlimited.
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const starts = [...apiSrc.matchAll(/^export const (\w+) = createServerFn/gm)];
+    assert.ok(starts.length >= 15, "server functions found");
+    const withSnapshot: string[] = [];
+    starts.forEach((m, i) => {
+      const body = apiSrc.slice(m.index, starts[i + 1]?.index ?? apiSrc.length);
+      const first = body.indexOf("snapshot(sql");
+      if (first < 0) return;
+      withSnapshot.push(m[1]);
+      const limits = [body.indexOf("consumeRateLimit("), body.indexOf("limitAction(sql, context.userId")].filter((n) => n >= 0);
+      assert.ok(limits.length > 0 && Math.min(...limits) < first, `${m[1]} must hit a rate limit before any snapshot`);
+    });
+    for (const fn of ["loadVela", "syncVela", "saveProfile", "swipe", "undoPass", "sendMessage", "blockUser", "reportUser", "setPlus", "uploadIdDocument"]) {
+      assert.ok(withSnapshot.includes(fn), `${fn} checked`);
+    }
+    const rule = apiSrc.match(/const ACTION_RULE = \{ windowSec: (\d+), max: (\d+) \};/);
+    assert.ok(rule, "ACTION_RULE missing");
+    assert.equal(Number(rule[1]), 60);
+    // A fast swiper plus a lively chat must never notice it.
+    assert.ok(Number(rule[2]) >= SWIPE_CAPS.perMinute + 20 + 20, "room for real swiping and chatting");
+    const helper = apiSrc.slice(apiSrc.indexOf("async function limitAction("), apiSrc.indexOf("/**", apiSrc.indexOf("async function limitAction(")));
+    assert.ok(helper.includes("`vela:load:${userId}`, LOAD_RULE"), "full answers share the load budget");
+    assert.ok(helper.includes("`vela:action:${userId}`, ACTION_RULE"));
+    assert.ok(helper.includes("throw userFacingError(ACTION_LIMITED_TEXT)"), "refused as a person-facing message, not a crash");
+    const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+    const failedFn = storeSrc.slice(storeSrc.indexOf("function failed("), storeSrc.indexOf("let applied"));
+    assert.ok(failedFn.indexOf("isActionLimited(err)") > 0 && failedFn.indexOf("isActionLimited(err)") < failedFn.indexOf("reportError(err)"), "limit is not reported as a crash");
+    const unlock = storeSrc.slice(storeSrc.indexOf("  unlockPlus: async"), storeSrc.indexOf("  checkoutPlus: async"));
+    assert.ok(unlock.includes('failed("plus", err)'), "a refused unlock shows a toast instead of an unhandled error");
+  });
+
   it("does not SELECT other people's photos for the deck or swipe target", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const deck = apiSrc.slice(apiSrc.indexOf("const deckRows"), apiSrc.indexOf("const inboundRows"));
