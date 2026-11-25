@@ -5,6 +5,7 @@ import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { errorMonitor } from "@/lib/vela/error-monitor";
 import { userFacingError } from "@/lib/vela/user-facing-error";
+import { LOAD_LIMITED_TEXT } from "@/lib/vela/request-failure";
 import {
   FREE_SWIPES,
   SWIPE_CAPS,
@@ -223,6 +224,16 @@ const STRIPE_SESSION_RULE = { windowSec: 3600, max: 10 };
 const BLOCK_RULE = { windowSec: 3600, max: 60 };
 /** "Ältere Nachrichten laden" per person: 30 pages a minute (3000 messages). */
 const OLDER_MESSAGES_RULE = { windowSec: 60, max: 30 };
+/**
+ * Full loads and background refreshes per person. Each one runs the whole
+ * snapshot (deck, sparks, every match and its chat), so a script with one
+ * login could otherwise hammer the database without limit. The app polls
+ * every 8 s in a chat (7–8 a minute, plus focus/online catch-ups), loads on
+ * start, pull-to-refresh and after Stripe; even several open devices stay far
+ * below these, counted across all of them.
+ */
+const LOAD_RULE = { windowSec: 60, max: 30 };
+const SYNC_RULE = { windowSec: 60, max: 90 };
 /**
  * Atomic burst guards on the rateLimit table. The count queries on
  * vela_messages / vela_reports / vela_swipes read-then-insert, so parallel
@@ -629,6 +640,11 @@ export const loadVela = createServerFn({ method: "GET" })
   .middleware([authMiddleware, errorMonitor])
   .handler(async ({ context }) => {
     const sql = await getSql();
+    // Checked before any heavy query (and before the retention fallback).
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:load:${context.userId}`, LOAD_RULE))) {
+      throw userFacingError(LOAD_LIMITED_TEXT);
+    }
     // Retention fallback on load, at most once per 10 minutes across all
     // instances (daily cron at /api/cron/retention runs the full purge).
     await (await ageReview()).purgeExpiredThrottled(sql);
@@ -645,6 +661,10 @@ export const syncVela = createServerFn({ method: "GET" })
   .validator((input: { known?: Record<string, string>; held?: Record<string, string> } | undefined) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
+    // Over the limit: answer null without touching the snapshot; the app keeps
+    // what it has and simply catches up on the next tick.
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:sync:${context.userId}`, SYNC_RULE))) return null;
     // Polling: me.photo is left out (the client keeps its own portrait from the
     // full load), so is every match photo the client already has, and so are
     // the chat messages it already holds (only new ones are sent).

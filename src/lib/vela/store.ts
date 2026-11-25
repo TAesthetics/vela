@@ -15,7 +15,7 @@ import {
   syncVela,
   undoPass,
 } from "@/lib/vela/api";
-import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "@/lib/vela/request-failure";
+import { LOAD_LIMITED_TEXT, SIGNED_OUT_TEXT, failureText, isLoadLimited, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "@/lib/vela/request-failure";
 import { reportError } from "@/lib/vela/error-reporter";
 import { emptySnapshot, keepOlderMessages, mergeMessages, messageTotal, prependOlder, type Billing, type Me, type Person, type Snapshot, type Suspension, type Thread } from "@/lib/vela/data";
 
@@ -209,6 +209,13 @@ export const useVela = create<VelaStore>((set, get) => ({
       snapshot = await loadVela();
     } catch (err) {
       if (isUnauthorized(err)) return endSession();
+      // Reloaded too often (pull-to-refresh spam, many tabs): say so, keep
+      // what is on screen, don't report it as a crash.
+      if (isLoadLimited(err)) {
+        if (!get().ready) set({ loadError: LOAD_LIMITED_TEXT });
+        else set({ toast: LOAD_LIMITED_TEXT });
+        return;
+      }
       if (!get().ready) {
         const offline = isOffline();
         if (!offline) reportError(err);
@@ -232,6 +239,8 @@ export const useVela = create<VelaStore>((set, get) => ({
       if (isUnauthorized(err)) return endSession();
       throw err;
     }
+    // Server-side poll limit reached: keep everything, the next tick catches up.
+    if (!snapshot) return;
     if (applied !== before) return;
     set({
       suspension: snapshot.suspension,

@@ -45,6 +45,43 @@ describe("veil", () => {
     assert.ok(!/\bme:/.test(merge), "sync must not overwrite my profile (poll leaves my photo out)");
   });
 
+  it("limits full loads and polls per person before any snapshot query", () => {
+    const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
+    const rule = (name: string) => {
+      const m = apiSrc.match(new RegExp(`const ${name} = \\{ windowSec: (\\d+), max: (\\d+) \\};`));
+      assert.ok(m, `${name} missing`);
+      return { windowSec: Number(m[1]), max: Number(m[2]) };
+    };
+    // Real use: a poll every 8 s in a chat (7.5/min) plus focus/online
+    // catch-ups, on a few devices at once; loads on start and pull-to-refresh.
+    const sync = rule("SYNC_RULE");
+    const load = rule("LOAD_RULE");
+    assert.equal(sync.windowSec, 60);
+    assert.equal(load.windowSec, 60);
+    assert.ok(sync.max >= 4 * (60 / 8) * 2, "sync limit must leave room for several devices");
+    assert.ok(load.max >= 10, "load limit must allow pull-to-refresh and Stripe reloads");
+    for (const [fn, end, key, ruleName] of [
+      ["export const loadVela", "export const syncVela", "vela:load:", "LOAD_RULE"],
+      ["export const syncVela", "export const saveProfile", "vela:sync:", "SYNC_RULE"],
+    ] as const) {
+      const body = apiSrc.slice(apiSrc.indexOf(fn), apiSrc.indexOf(end));
+      const limit = body.indexOf(`consumeRateLimit(sql, \`${key}\${context.userId}\`, ${ruleName})`);
+      assert.ok(limit > 0, `${fn} must consume ${ruleName} per person`);
+      assert.ok(limit < body.indexOf("snapshot(sql"), `${fn} must check the limit before the snapshot`);
+    }
+    const loadBody = apiSrc.slice(apiSrc.indexOf("export const loadVela"), apiSrc.indexOf("export const syncVela"));
+    assert.ok(
+      loadBody.indexOf("consumeRateLimit(") < loadBody.indexOf("purgeExpiredThrottled"),
+      "load limit must come before the retention fallback",
+    );
+    const storeSrc = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+    const syncFn = storeSrc.slice(storeSrc.indexOf("  sync: async"), storeSrc.indexOf("  save: async"));
+    assert.ok(syncFn.indexOf("if (!snapshot) return;") > 0, "a limited poll must leave the app state alone");
+    assert.ok(syncFn.indexOf("if (!snapshot) return;") < syncFn.indexOf("set({"), "null check before applying");
+    const loadFn = storeSrc.slice(storeSrc.indexOf("  load: async"), storeSrc.indexOf("  sync: async"));
+    assert.ok(loadFn.indexOf("isLoadLimited(err)") < loadFn.indexOf("reportError(err)"), "limit is not reported as a crash");
+  });
+
   it("does not SELECT other people's photos for the deck or swipe target", () => {
     const apiSrc = readFileSync(new URL("./api.ts", import.meta.url), "utf8");
     const deck = apiSrc.slice(apiSrc.indexOf("const deckRows"), apiSrc.indexOf("const inboundRows"));

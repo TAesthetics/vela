@@ -73,3 +73,15 @@ export function loadFailureText(offline: boolean): string {
     ? "Keine Verbindung. Vela lädt, sobald du wieder Netz hast."
     : "Vela ließ sich gerade nicht laden. Versuch es gleich nochmal.";
 }
+
+/**
+ * loadVela refused because this login reloaded too often within a minute
+ * (LOAD_RULE in api.ts). Not a bug and not offline, so it is shown as is and
+ * never sent to error monitoring.
+ */
+export const LOAD_LIMITED_TEXT = "Vela wurde gerade sehr oft neu geladen. Warte eine Minute und versuch es dann nochmal.";
+
+/** True for the server's "reloaded too often" answer (message survives serialization). */
+export function isLoadLimited(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { message?: unknown }).message === LOAD_LIMITED_TEXT;
+}

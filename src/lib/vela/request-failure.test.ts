@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SIGNED_OUT_TEXT, failureText, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "./request-failure.ts";
+import { LOAD_LIMITED_TEXT, SIGNED_OUT_TEXT, failureText, isLoadLimited, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "./request-failure.ts";
 
 const ACTIONS: FailedAction[] = ["save", "swipe", "undo", "send", "block", "report", "uploadId", "older"];
 
@@ -47,4 +47,14 @@ test("a failed first load says why instead of loading forever", () => {
   assert.ok(failed.length > 10 && !failed.startsWith("Keine Verbindung."));
   assert.notEqual(offline, SIGNED_OUT_TEXT);
   assert.notEqual(failed, SIGNED_OUT_TEXT);
+});
+
+test("isLoadLimited only matches the server's reload-limit answer", () => {
+  assert.equal(isLoadLimited(new Error(LOAD_LIMITED_TEXT)), true);
+  assert.equal(isLoadLimited({ message: LOAD_LIMITED_TEXT }), true);
+  assert.equal(isLoadLimited(new Error("Unauthorized")), false);
+  assert.equal(isLoadLimited(new Error("Failed to fetch")), false);
+  assert.equal(isLoadLimited(LOAD_LIMITED_TEXT), false);
+  assert.equal(isLoadLimited(null), false);
+  assert.ok(!LOAD_LIMITED_TEXT.startsWith("Keine Verbindung."), "not an offline text");
 });
