@@ -3,6 +3,7 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useVela } from "@/lib/vela/store";
 import { messageTotal } from "@/lib/vela/data";
 import { Frame, PrimaryButton, Wordmark } from "@/components/vela/ui";
+import { useBack } from "@/components/vela/use-back";
 import { Onboarding } from "@/components/vela/onboarding";
 import { Discover } from "@/components/vela/discover";
 import { Celebrate, Chat, MeScreen, Nav, PersonView, Plus, Signals } from "@/components/vela/flows";
@@ -97,6 +98,14 @@ function Authed() {
   const [tab, setTab] = useState<Tab>("discover");
   const [screen, setScreen] = useState<Screen>({ name: "tabs" });
   const online = useOnline();
+
+  // Android back button: chat, profile and Vela+ go back to the tabs, another
+  // tab goes back to Entdecken; only on Entdecken does back leave the app.
+  const inMain = ready && !suspension && Boolean(me?.onboarded);
+  useBack(inMain && (screen.name !== "tabs" || tab !== "discover"), "screen", () => {
+    if (screen.name !== "tabs") setScreen({ name: "tabs" });
+    else setTab("discover");
+  });
 
   useEffect(() => {
     void load().catch(() => undefined);

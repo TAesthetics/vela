@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { REPORT_REASONS, type ReportReason } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
 import { LengthHint, PrimaryButton, cn } from "@/components/vela/ui";
+import { useBack, useDialogFocus } from "@/components/vela/use-back";
 
 type Step = "closed" | "menu" | "block" | "report";
 
@@ -24,6 +25,20 @@ export function SafetyMenu({ personId, name, onDone }: { personId: string; name:
     setReason(null);
     setDetails("");
   }
+
+  const open = step !== "closed";
+  const titleId = useId();
+  const panel = useDialogFocus<HTMLDivElement>(open);
+  // Android back / Escape: from "blockieren?" or "melden" back to the menu,
+  // from the menu closed. Not while the request is running.
+  useBack(open, "dialog", () => {
+    if (busy) return;
+    if (step === "block" || step === "report") {
+      setStep("menu");
+      setReason(null);
+      setDetails("");
+    } else close();
+  });
 
   async function run(action: () => Promise<boolean>) {
     if (busy) return;
@@ -51,16 +66,19 @@ export function SafetyMenu({ personId, name, onDone }: { personId: string; name:
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby={titleId}
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
           onClick={close}
         >
           <div
-            className="w-full max-w-md rounded-t-3xl bg-bg p-5 pb-8 text-paper"
+            ref={panel}
+            tabIndex={-1}
+            className="w-full max-w-md rounded-t-3xl bg-bg p-5 pb-8 text-paper outline-none"
             onClick={(event) => event.stopPropagation()}
           >
             {step === "menu" && (
               <div className="grid gap-3">
-                <p className="font-display text-2xl">{name}</p>
+                <p id={titleId} className="font-display text-2xl">{name}</p>
                 <button
                   type="button"
                   onClick={() => setStep("block")}
@@ -82,7 +100,7 @@ export function SafetyMenu({ personId, name, onDone }: { personId: string; name:
             )}
             {step === "block" && (
               <div className="grid gap-3">
-                <p className="font-display text-2xl">{name} blockieren?</p>
+                <p id={titleId} className="font-display text-2xl">{name} blockieren?</p>
                 <p className="text-sm text-muted">
                   Ihr seht euch nicht mehr: kein Profil, kein Funk, kein Gespräch. {name} erfährt nichts davon.
                 </p>
@@ -96,7 +114,7 @@ export function SafetyMenu({ personId, name, onDone }: { personId: string; name:
             )}
             {step === "report" && (
               <div className="grid gap-3">
-                <p className="font-display text-2xl">{name} melden</p>
+                <p id={titleId} className="font-display text-2xl">{name} melden</p>
                 <p className="text-sm text-muted">Was ist los? Melden blockiert {name} automatisch.</p>
                 <div className="grid grid-cols-2 gap-2">
                   {REPORT_REASONS.map((item) => (

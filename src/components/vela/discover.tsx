@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { EyeOff, Flame, Lock, PenLine, Undo2, X } from "lucide-react";
 import {
   ORBITS,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
 import { LengthHint, Portrait, PrimaryButton, RoundButton, Wordmark, cn } from "@/components/vela/ui";
+import { useBack, useDialogFocus } from "@/components/vela/use-back";
 
 type Fly = "left" | "right" | null;
 
@@ -429,12 +430,15 @@ function NoteSheet({
 }) {
   const [promptId, setPromptId] = useState(person.prompts[0].id);
   const [note, setNote] = useState("");
+  const titleId = useId();
+  const panel = useDialogFocus<HTMLDivElement>(true);
+  useBack(true, "dialog", onClose);
   return (
-    <div className="absolute inset-0 z-40 flex flex-col justify-end bg-bg/80">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="absolute inset-0 z-40 flex flex-col justify-end bg-bg/80">
       <button type="button" aria-label="Schließen" className="min-h-16 flex-1" onClick={onClose} />
-      <div className="max-h-full overflow-y-auto rounded-t-3xl bg-surface px-5 pt-4 pb-safe">
+      <div ref={panel} tabIndex={-1} className="max-h-full overflow-y-auto rounded-t-3xl bg-surface px-5 pt-4 pb-safe outline-none">
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-line" />
-        <h2 className="font-display text-3xl text-paper">Worauf funkst du?</h2>
+        <h2 id={titleId} className="font-display text-3xl text-paper">Worauf funkst du?</h2>
         <p className="mt-2 mb-4 text-sm text-muted">Eine Notiz ist optional. Ein Satz von {person.name} nicht.</p>
         <div className="grid gap-2">
           {person.prompts.map((prompt) => (

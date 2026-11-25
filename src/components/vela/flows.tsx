@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Compass, Eye, Flame, MessageCircle, Smartphone, Undo2, UserRound } from "lucide-react";
 import {
   ICEBREAKERS,
@@ -16,6 +16,7 @@ import {
 import { useVela } from "@/lib/vela/store";
 import { UserButton } from "@/lib/auth/gates";
 import { FieldLabel, LengthHint, Portrait, PrimaryButton, TextInput, cn } from "@/components/vela/ui";
+import { useBack, useDialogFocus } from "@/components/vela/use-back";
 import { SafetyMenu } from "@/components/vela/safety";
 import { LegalLinks } from "@/components/vela/legal";
 import { exportMyData } from "@/lib/vela/api";
@@ -928,8 +929,19 @@ export function Celebrate({
   onWrite: () => void;
   onLater: () => void;
 }) {
+  const titleId = useId();
+  const panel = useDialogFocus<HTMLDivElement>(true);
+  // Android back / Escape = "Später".
+  useBack(true, "dialog", onLater);
   return (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-bg/92 px-8 text-center">
+    <div
+      ref={panel}
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-bg/92 px-8 text-center outline-none"
+    >
       <div className="flex items-center">
         <div className="grid size-20 place-items-center rounded-full border-2 border-bg bg-ember font-display text-3xl text-ink">
           {mine.slice(0, 1)}
@@ -937,7 +949,7 @@ export function Celebrate({
         <Portrait name={name} veiled className="-ml-4 size-20 rounded-full border-2 border-bg" />
       </div>
       <p className="mt-8 text-xs tracking-widest text-ember">ES KLINGT</p>
-      <h2 className="mt-3 font-display text-5xl text-paper">Du & {name}</h2>
+      <h2 id={titleId} className="mt-3 font-display text-5xl text-paper">Du & {name}</h2>
       <p className="mt-4 max-w-xs text-muted">Der Schleier bleibt. Schreibt erst. Dann seht ihr euch.</p>
       <div className="mt-8 w-full max-w-xs">
         <PrimaryButton onClick={onWrite}>Schreiben</PrimaryButton>

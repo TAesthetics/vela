@@ -5,6 +5,8 @@
  * `window.Capacitor` into the page. Everything here is a no-op in a normal
  * browser, and the plugin code is only imported inside the native app.
  */
+import { handleBack } from "@/lib/vela/back-stack";
+
 type CapacitorGlobal = { isNativePlatform?: () => boolean; getPlatform?: () => string };
 
 export function isNativeApp(): boolean {
@@ -36,6 +38,9 @@ export async function initNativeShell(onAuthUrl: (url: string) => void): Promise
   await SplashScreen.hide().catch(() => undefined);
 
   await App.addListener("backButton", ({ canGoBack }) => {
+    // Open sheet, chat, profile or Vela+ first (VELA switches screens without
+    // URLs, so there is no history to go back through); only then leave.
+    if (handleBack()) return;
     if (canGoBack) window.history.back();
     else void App.exitApp();
   });

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ORBITS, VALUES, blankMe, nextQuestion, type Me, type Orbit } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
 import { FieldLabel, LengthHint, PrimaryButton, TextInput, Wordmark, cn } from "@/components/vela/ui";
+import { useBack } from "@/components/vela/use-back";
 
 export function Onboarding() {
   const save = useVela((state) => state.save);
@@ -53,6 +54,13 @@ export function Onboarding() {
     setStep((value) => value + 1);
   }
 
+  function back() {
+    setError("");
+    setStep((value) => Math.max(0, value - 1));
+  }
+  // Android back button goes one step back instead of closing the app.
+  useBack(step > 0 && !busy, "screen", back);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col px-6 pt-8 pb-6">
       <div className="flex items-center justify-between">
@@ -92,10 +100,7 @@ export function Onboarding() {
           </PrimaryButton>
           <button
             type="button"
-            onClick={() => {
-              setError("");
-              setStep((value) => value - 1);
-            }}
+            onClick={back}
             className="h-11 text-sm text-muted"
           >
             Zurück
