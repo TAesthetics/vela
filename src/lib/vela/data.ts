@@ -55,6 +55,8 @@ export type Thread = {
    * their last CHAT_HISTORY_LIMIT messages (older ones stay on the server).
    */
   messagesFrom?: number;
+  /** Epoch ms when the match happened (the later of the two sparks). */
+  matchedAt?: number;
 };
 
 export type IdCheckStatus = "none" | "pending" | "approved" | "rejected" | "expired";
@@ -187,6 +189,57 @@ export function formatTime(at: number) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * Time shown next to a conversation in "Signale": the clock time today,
+ * "Gestern", the weekday within the last week, otherwise the date (the
+ * year only when it isn't this year). Used to show only the clock time, so a
+ * message from last week looked like it arrived today.
+ */
+export function formatListTime(at: number, now: number = Date.now()) {
+  const date = new Date(at);
+  const today = new Date(now);
+  const startOf = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+  const days = Math.round((startOf(today) - startOf(date)) / 86_400_000);
+  if (days <= 0) return formatTime(at);
+  if (days === 1) return "Gestern";
+  if (days < 7) return date.toLocaleDateString("de-DE", { weekday: "short" });
+  return date.toLocaleDateString(
+    "de-DE",
+    date.getFullYear() === today.getFullYear()
+      ? { day: "2-digit", month: "2-digit" }
+      : { day: "2-digit", month: "2-digit", year: "2-digit" },
+  );
+}
+
+/** Last activity of a conversation: its newest message, or the match itself. */
+export function threadActivity(thread: Pick<Thread, "messages" | "matchedAt">): number {
+  const last = thread.messages[thread.messages.length - 1];
+  return Math.max(last?.at ?? 0, thread.matchedAt ?? 0);
+}
+
+/**
+ * "Signale" lists conversations by last activity, newest first, like every
+ * messenger. The server orders matches by when I sparked, so a chat with a
+ * new message used to stay buried below newer, silent matches.
+ */
+export function sortThreadsByActivity<T extends Pick<Thread, "messages" | "matchedAt">>(threads: T[]): T[] {
+  return threads
+    .map((thread, index) => ({ thread, index, at: threadActivity(thread) }))
+    .sort((a, b) => b.at - a.at || a.index - b.index)
+    .map((item) => item.thread);
+}
+
+/**
+ * Unread dot: something arrived after the last position seen on this device,
+ * and the conversation ends with the other person. A chat whose latest
+ * message is my own (written on another device, or before reinstalling)
+ * has nothing left to read.
+ */
+export function hasUnread(thread: Pick<Thread, "messages" | "messagesFrom">, seenTotal: number | undefined): boolean {
+  const last = thread.messages[thread.messages.length - 1];
+  return last?.from === "them" && messageTotal(thread) > (seenTotal ?? 0);
 }
 
 export function nextQuestion(current: string, blocked: string) {

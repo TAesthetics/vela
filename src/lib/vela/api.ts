@@ -487,8 +487,9 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
   // No photo column here either: photos of matches are loaded below, one by one,
   // only for matches whose veil has actually lifted, so a veiled photo is never
   // even read from the database for this request.
-  const matchRows = await sql<ProfileRow>`
-    select p.user_id, p.name, p.age, p.city, p.orbit, p.values, p.prompts, p.plus
+  const matchRows = await sql<ProfileRow & { matched_at: unknown }>`
+    select p.user_id, p.name, p.age, p.city, p.orbit, p.values, p.prompts, p.plus,
+      greatest(mine.created_at, theirs.created_at) as matched_at
     from vela_swipes mine
     join vela_swipes theirs
       on theirs.from_user = mine.to_user
@@ -580,6 +581,7 @@ async function snapshot(sql: Sql, userId: string, options: SnapshotOptions = {})
       theirCount,
       messages,
       messagesFrom,
+      matchedAt: stamp(row.matched_at),
     };
   })));
 

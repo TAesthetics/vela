@@ -6,11 +6,13 @@ import {
   VEIL_AFTER,
   VALUES,
   PLUS_PRICE_LABEL,
-  formatTime,
+  formatListTime,
+  hasUnread,
   messageTotal,
   orbitLabel,
   RESONANCE,
   resonanceParts,
+  sortThreadsByActivity,
   type Orbit,
 } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
@@ -53,9 +55,9 @@ export function Signals({
           </p>
         ) : (
           <ul className="mt-2">
-            {threads.map((thread) => {
+            {sortThreadsByActivity(threads).map((thread) => {
               const last = thread.messages[thread.messages.length - 1];
-              const unread = messageTotal(thread) > (seen[thread.person.id] ?? 0);
+              const unread = hasUnread(thread, seen[thread.person.id]);
               return (
                 <li key={thread.person.id}>
                   <button
@@ -73,7 +75,7 @@ export function Signals({
                       <span className="flex items-baseline justify-between gap-2">
                         <span className="font-medium text-paper">{thread.person.name}</span>
                         {last && (
-                          <span className="text-xs text-muted tabular-nums">{formatTime(last.at)}</span>
+                          <span className="text-xs text-muted tabular-nums">{formatListTime(last.at)}</span>
                         )}
                       </span>
                       <span className="mt-1 block truncate text-sm text-muted">
