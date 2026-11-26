@@ -30,7 +30,7 @@
   "dependencies": {
     "@capacitor/app": "^8.1.2",
     "@capacitor/browser": "^8.0.5",
-    "@capacitor/core": "^8.5.3",
+    "@capacitor/core": "^8.6.3",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.4",
@@ -92,9 +92,9 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
-    "@capacitor/android": "^8.5.3",
-    "@capacitor/cli": "^8.5.3",
-    "@capacitor/ios": "^8.5.3",
+    "@capacitor/android": "^8.6.3",
+    "@capacitor/cli": "^8.6.3",
+    "@capacitor/ios": "^8.6.3",
     "@eslint/js": "^9.20.0",
     "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^22.16.5",
