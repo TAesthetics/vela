@@ -21,7 +21,8 @@ function Datenschutz() {
       <Section title="2. Anmeldung mit E-Mail und Passwort">
         <p>
           Du registrierst dich mit deiner E-Mail-Adresse und einem Passwort und bestätigst, dass du mindestens 18
-          Jahre alt bist. Wir speichern deine E-Mail-Adresse, eine Nutzerkennung und dein Passwort nur als
+          Jahre alt bist. Beim Anlegen deines Profils speichern wir, wann du das bestätigt und die AGB mit den Regeln
+          von Vela akzeptiert hast. Wir speichern deine E-Mail-Adresse, eine Nutzerkennung und dein Passwort nur als
           nicht umkehrbaren Hash (wir kennen dein Passwort nie). Es gibt keine Anmeldung über Google, X oder
           andere Dritte, und wir schicken keine Werbe- oder Bestätigungsmails. Passwort vergessen? Schreib uns
           von deiner Konto-Adresse an {OPERATOR.email}; wir antworten mit einem Link zum Zurücksetzen, der 24

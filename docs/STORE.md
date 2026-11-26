@@ -38,6 +38,7 @@ Für die Anmeldung musst du nichts extra einrichten: Die App meldet sich mit E-M
 1. **„Mit Apple anmelden“ (Apple-Regel 4.8)** ist derzeit **nicht nötig**: VELA nutzt nur E-Mail und Passwort, keine Google- oder X-Anmeldung. Kommt später ein Social-Login dazu, muss auch „Sign in with Apple“ rein.
 2. **Inhalte von Nutzerinnen und Nutzern (Apple 1.2).**
    - VELA hat bereits: Melden, Blockieren, Prüfung durch den Betreiber und eine Kontaktadresse im Impressum.
+   - Nutzungsbedingungen mit „keine Toleranz“: Beim Anlegen des Profils muss jede Person „Ich akzeptiere die AGB und Regeln“ ankreuzen (Pflicht, Zeitpunkt wird gespeichert). Die Regeln stehen in den AGB unter Punkt 3 (`/agb#regeln`): was verboten ist und dass Verstöße zur Sperre führen. Im Review-Hinweis erwähnen.
    - Apple verlangt zusätzlich „eine Methode, anstößige Inhalte zu filtern“. VELA hat dafür einen einfachen Wortfilter ohne KI (`src/lib/vela/content-filter.ts`): Profiltexte, Funk-Notizen und Nachrichten mit Beleidigungen, Hassbegriffen, sexuell expliziten Begriffen oder Drohungen werden gar nicht erst gespeichert, die Person sieht einen Hinweis und kann umformulieren. Im Review-Hinweis erwähnen.
    - Im Review-Hinweis beschreiben, wie schnell Meldungen bearbeitet werden (Apple erwartet: innerhalb von 24 Stunden).
 3. **Vela+ ohne Stripe in der App.** In der iOS- und Android-App zeigt der Vela+-Bildschirm keinen Kauf- und keinen „Abo verwalten“-Knopf und keinen Hinweis auf die Website (Apple 3.1.1, Google Play Billing). Wer schon über die Website abonniert hat, behält Vela+ auch in der App. Ein Kauf in der App braucht später Apple- bzw. Google-In-App-Käufe über RevenueCat. Die Server-Seite ist fertig (`/api/revenuecat/webhook`, setzt dasselbe Vela+-Feld, Einrichtung in `docs/VERCEL.md` Abschnitt 6); es fehlen RevenueCat-Konto, Produkte in App Store Connect / Play Console und der Kaufknopf mit SDK in der App.
@@ -253,6 +254,7 @@ Push ist vorbereitet, aber aus (`pushNotificationsEnabled` in `src/lib/native.ts
 - [ ] `npm run native:setup` mit `VELA_APP_URL` ausgeführt
 - [x] „Mit Apple anmelden“ derzeit nicht nötig (nur E-Mail + Passwort); erst bei Social-Login ergänzen (4.8)
 - [x] Wortfilter, Blockieren, Melden und Sperre wegen Regelverstoß auf /admin/age (Apple 1.2)
+- [x] AGB mit Regeln („keine Toleranz“) beim Profil-Anlegen akzeptiert (Apple 1.2)
 - [ ] Meldungen innerhalb von 24 h auf /admin/age bearbeiten (laufende Aufgabe)
 - [ ] Demo-Konto (E-Mail + Passwort) mit Profil (plus zweites Testprofil)
 - [x] Datenschutz- und Impressum-URL erreichbar (`/datenschutz`, `/impressum`, `/agb`)

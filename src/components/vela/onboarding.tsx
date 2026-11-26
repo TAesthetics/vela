@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ORBITS, VALUES, blankMe, nextQuestion, type Me, type Orbit } from "@/lib/vela/data";
+import { ORBITS, VALUES, blankMe, consentProblem, nextQuestion, type Me, type Orbit } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
 import { FieldLabel, LengthHint, PrimaryButton, TextInput, Wordmark, cn } from "@/components/vela/ui";
 import { useBack } from "@/components/vela/use-back";
+import { openLegalPage } from "@/lib/native";
 
 export function Onboarding() {
   const save = useVela((state) => state.save);
@@ -21,7 +22,8 @@ export function Onboarding() {
       if (draft.name.trim().length < 2) return "Wie sollen wir dich nennen?";
       if (draft.age < 18 || draft.age > 99) return "Vela ist nur für Erwachsene.";
       if (draft.city.trim().length < 2) return "In welcher Stadt bist du heute Nacht?";
-      if (!draft.adultConfirmed) return "Bitte bestätige, dass du mindestens 18 Jahre alt bist.";
+      const consent = consentProblem(draft);
+      if (consent) return consent;
     }
     if (step === 3) {
       if (draft.prompts.some((prompt) => prompt.a.trim().length < 8)) {
@@ -178,6 +180,35 @@ function Basics({
         <span>
           Ich bin mindestens 18 Jahre alt.
           <span className="block text-xs text-muted">Pflicht. Vela ist nur für Erwachsene.</span>
+        </span>
+      </label>
+      <label className="flex items-start gap-3 text-sm text-paper">
+        <input
+          type="checkbox"
+          required
+          checked={draft.termsAccepted}
+          onChange={(event) => patch({ termsAccepted: event.target.checked })}
+          className="mt-0.5 size-5 shrink-0 accent-ember"
+        />
+        <span>
+          Ich akzeptiere die{" "}
+          <a
+            href="/agb#regeln"
+            target="_blank"
+            rel="noopener"
+            onClick={(event) => {
+              event.preventDefault();
+              openLegalPage("/agb#regeln").catch(() => undefined);
+            }}
+            className="underline underline-offset-4"
+          >
+            AGB und Regeln
+          </a>
+          .
+          <span className="block text-xs text-muted">
+            Pflicht. Keine Beleidigungen, Belästigung, Hass, Drohungen, Nacktfotos, Fake-Profile oder Spam. Wer dagegen
+            verstößt, wird nach einer Meldung gesperrt.
+          </span>
         </span>
       </label>
       <label>

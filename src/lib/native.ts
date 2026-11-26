@@ -70,3 +70,18 @@ export async function nativeHaptic(kind: "match" | "tap"): Promise<void> {
  * ("Push später"). Kept as the single place to wire them up.
  */
 export const pushNotificationsEnabled = false;
+
+/**
+ * Opens a page like /agb without leaving the current screen (onboarding keeps
+ * its draft): in the native app in the in-app browser (a plain target=_blank
+ * link would replace the app's WebView on Android), on the web in a new tab.
+ */
+export async function openLegalPage(path: string): Promise<void> {
+  const url = `${window.location.origin}${path}`;
+  if (isNativeApp()) {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.open({ url, presentationStyle: "popover" });
+    return;
+  }
+  window.open(url, "_blank", "noopener");
+}

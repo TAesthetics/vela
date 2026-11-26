@@ -8,5 +8,5 @@ export const OPERATOR = {
   email: "terence.nwaeke@gmail.com",
   purpose: "Betrieb der Dating-App Vela",
   database: "Neon Inc. (USA), serverloses PostgreSQL",
-  updated: "28. Oktober 2026",
+  updated: "26. November 2026",
 };

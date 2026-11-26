@@ -13,6 +13,8 @@ export type Me = {
   onboarded: boolean;
   /** Ticked "Ich bin mindestens 18 Jahre alt" (stored server-side with a timestamp). */
   adultConfirmed: boolean;
+  /** Accepted the AGB incl. the community rules (Apple 1.2), stored server-side with a timestamp. */
+  termsAccepted: boolean;
 };
 
 export type Person = {
@@ -210,6 +212,7 @@ export function blankMe(): Me {
     photo: null,
     onboarded: false,
     adultConfirmed: false,
+    termsAccepted: false,
   };
 }
 
@@ -305,4 +308,15 @@ export function keepOlderMessages(fresh: Thread, held: Thread | undefined): Thre
     if (held.messages[position - base].id !== fresh.messages[position - from].id) return fresh;
   }
   return { ...fresh, messages: [...held.messages.slice(0, from - base), ...fresh.messages], messagesFrom: base };
+}
+
+/**
+ * Both ticks a new profile needs before it is saved: 18+ and the AGB with the
+ * community rules (no tolerance for abuse, Apple 1.2). Checked in onboarding
+ * and again on the server (saveProfile), which stores the time of each.
+ */
+export function consentProblem(me: { adultConfirmed?: unknown; termsAccepted?: unknown }): string | null {
+  if (me.adultConfirmed !== true) return "Bitte bestätige, dass du mindestens 18 Jahre alt bist.";
+  if (me.termsAccepted !== true) return "Bitte akzeptiere die AGB und die Regeln von Vela.";
+  return null;
 }
