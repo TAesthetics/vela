@@ -5,11 +5,13 @@ import {
   decideIdCheck,
   liftRuleBan,
   loadAdmin,
+  loadReportContext,
   resolveReport,
   type AdminData,
   type AdminResetLink,
 } from "@/lib/vela/admin-api";
-import { REPORT_REASONS } from "@/lib/vela/data";
+import { REPORT_REASONS, orbitLabel, type Orbit } from "@/lib/vela/data";
+import type { ReportContext } from "@/lib/vela/report-context";
 
 export const Route = createFileRoute("/admin/age")({
   head: () => ({ meta: [{ title: "Altersprüfung – Vela Admin" }, { name: "robots", content: "noindex" }] }),
@@ -125,11 +127,15 @@ function AdminAge() {
               <span className={report.reason === "minor" ? "text-ember" : ""}>{reasonLabel(report.reason)}</span> ·{" "}
               {report.name ?? report.toUser} · {report.status ?? "kein Profil"} · {when(report.createdAt)}
             </p>
+            {report.reporters > 1 && (
+              <p className="mt-1 text-xs font-semibold text-ember">Von {report.reporters} verschiedenen Personen gemeldet</p>
+            )}
             {(() => {
               const wait = waiting(report.createdAt);
               return wait && <p className={`mt-1 text-xs ${wait.urgent ? "font-semibold text-ember" : "text-muted"}`}>{wait.label}</p>;
             })()}
             {report.details && <p className="mt-1 text-sm text-muted">„{report.details}“</p>}
+            <ReportDetails reportId={report.id} />
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
@@ -290,6 +296,91 @@ function ResetLinkTool() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * "Profil & Chat ansehen": loads the reported profile and the chat between the
+ * two only when opened, so the list stays light (portraits are up to 120 KB).
+ */
+function ReportDetails({ reportId }: { reportId: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [context, setContext] = useState<ReportContext | null>(null);
+
+  async function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (context?.ok || loading) return;
+    setLoading(true);
+    try {
+      setContext(await loadReportContext({ data: { id: reportId } }));
+    } catch {
+      setContext({ ok: false, error: "Konnte nicht geladen werden. Versuch es gleich nochmal." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-2">
+      <button type="button" onClick={() => void toggle()} aria-expanded={open} className="h-9 text-xs text-muted underline">
+        {open ? "Profil & Chat ausblenden" : "Profil & Chat ansehen"}
+      </button>
+      {open && (
+        <div className="mt-2 rounded-xl bg-surface p-3 text-sm">
+          {loading && <p className="text-muted">Lädt…</p>}
+          {!loading && context && !context.ok && <p className="text-ember">{context.error}</p>}
+          {!loading && context?.ok && (
+            <>
+              {context.profile ? (
+                <div className="flex gap-3">
+                  {context.profile.photo && (
+                    <img src={context.profile.photo} alt="Porträt der gemeldeten Person" className="h-28 w-24 shrink-0 rounded-lg object-cover" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {context.profile.name}
+                      {context.profile.age !== null && `, ${context.profile.age}`} · {context.profile.city}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {orbitLabel(context.profile.orbit as Orbit)} · {context.profile.values.join(", ")} · Profil seit {when(context.profile.createdAt)}
+                    </p>
+                    {context.profile.prompts.map((prompt, index) => (
+                      <p key={index} className="mt-2 break-words">
+                        <span className="block text-xs text-muted">{prompt.q}</span>
+                        {prompt.a}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted">Profil inzwischen gelöscht.</p>
+              )}
+              <p className="mt-4 text-xs text-muted">
+                Chat zwischen den beiden
+                {context.more ? ` (nur die letzten ${context.messages.length} Nachrichten)` : ""}:
+              </p>
+              {context.messages.length === 0 && <p className="mt-1 text-muted">Keine Nachrichten.</p>}
+              <ul className="mt-1 grid gap-1">
+                {context.messages.map((message) => (
+                  <li key={message.id} className={message.by === "reported" ? "" : "text-muted"}>
+                    <span className="text-xs">
+                      {message.by === "reported" ? "Gemeldet" : "Meldende Person"}
+                      {message.kind === "note" ? " (Funk-Notiz)" : ""} · {when(message.at)}:
+                    </span>{" "}
+                    <span className="break-words">{message.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

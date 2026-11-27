@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSql, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { errorMonitor } from "@/lib/vela/error-monitor";
+import type { ReportContext } from "@/lib/vela/report-context";
 
 /** Operator tools for age review. Access rules: see admin-access.server.ts. */
 async function isAdmin(sql: Sql, userId: string) {
@@ -27,6 +28,8 @@ export type AdminReport = {
   details: string;
   createdAt: string;
   status: string | null;
+  /** How many different people have reported this person so far (all reports, also closed ones). */
+  reporters: number;
 };
 
 export type AdminFlag = {
@@ -95,8 +98,9 @@ async function load(sql: Sql, adminUserId: string): Promise<AdminData> {
     order by f.created_at desc
     limit 50
   `;
-  const reports = await sql<{ id: string; to_user: string; name: string | null; reason: string; details: string; created_at: unknown; status: string | null }>`
-    select r.id, r.to_user, p.name, r.reason, r.details, r.created_at, p.status
+  const reports = await sql<{ id: string; to_user: string; name: string | null; reason: string; details: string; created_at: unknown; status: string | null; reporters: unknown }>`
+    select r.id, r.to_user, p.name, r.reason, r.details, r.created_at, p.status,
+      (select count(distinct x.from_user) from vela_reports x where x.to_user = r.to_user) as reporters
     from vela_reports r left join vela_profiles p on p.user_id = r.to_user
     where r.reviewed_at is null
     order by (r.reason = 'minor') desc, r.created_at asc
@@ -146,6 +150,7 @@ async function load(sql: Sql, adminUserId: string): Promise<AdminData> {
       details: row.details,
       createdAt: iso(row.created_at),
       status: row.status,
+      reporters: Number(row.reporters ?? 1),
     })),
     flags: flagRows.map((row) => ({
       id: row.id,
@@ -219,6 +224,42 @@ export const resolveReport = createServerFn({ method: "POST" })
       await age.recordFlag(sql, userId, "operator", "banned", ["Vom Betreiber gesperrt (Regelverstoß)"]);
     }
     return load(sql, context.userId);
+  });
+
+/**
+ * What a report is about, loaded only when the operator opens it: the reported
+ * profile (texts and portrait as stored now) and the latest messages between
+ * the reporter and the reported person, so a ban can be decided on the actual
+ * content instead of the reason alone. Read-only, admin only; account IDs and
+ * the reporter's name are not sent to the page.
+ */
+export const loadReportContext = createServerFn({ method: "POST" })
+  .middleware([authMiddleware, errorMonitor])
+  .validator((input: { id?: string }) => input)
+  .handler(async ({ context, data }): Promise<ReportContext> => {
+    const sql = await getSql();
+    if (!(await isAdmin(sql, context.userId))) return { ok: false, error: "Kein Zugriff." };
+    const id = String(data?.id ?? "");
+    const report = await sql<{ from_user: string; to_user: string }>`
+      select from_user, to_user from vela_reports where id = ${id}
+    `;
+    if (!report[0]) return { ok: false, error: "Meldung nicht gefunden." };
+    const { from_user: reporter, to_user: reported } = report[0];
+    const { reportMessages, reportProfile, REPORT_CONTEXT_MESSAGES } = await import("@/lib/vela/report-context");
+    const profile = await sql<{ name: unknown; age: unknown; city: unknown; orbit: unknown; values: unknown; prompts: unknown; photo: unknown; status: unknown; created_at: unknown }>`
+      select name, age, city, orbit, values, prompts, photo, status, created_at
+      from vela_profiles where user_id = ${reported}
+    `;
+    const [pairA, pairB] = reporter < reported ? [reporter, reported] : [reported, reporter];
+    // Newest first over the pair index, one extra row to know if there is more.
+    const rows = await sql<{ id: unknown; from_user: unknown; body: unknown; kind: unknown; created_at: unknown }>`
+      select id, from_user, body, kind, created_at from vela_messages
+      where pair_a = ${pairA} and pair_b = ${pairB}
+      order by created_at desc, id desc
+      limit ${REPORT_CONTEXT_MESSAGES + 1}
+    `;
+    const chat = reportMessages(rows, reported, reporter);
+    return { ok: true, profile: reportProfile(profile[0]), messages: chat.messages, more: chat.more };
   });
 
 /** Lift a rule ban. An age suspension that is still open takes over again. */
