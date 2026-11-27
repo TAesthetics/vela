@@ -117,8 +117,10 @@ Für die Anmeldung musst du nichts extra einrichten: Die App meldet sich mit E-M
    | Nutzerinhalte → Andere Nutzerinhalte | Profilsätze, Stadt, Alter, Orbit, Werte, Meldungen | ja | nein | App-Funktionalität |
    | Kennungen → Nutzer-ID | interne Konto-ID | ja | nein | App-Funktionalität |
    | Nutzungsdaten → Produktinteraktion | Swipes, Matches, Blockierungen | ja | nein | App-Funktionalität |
+   | Diagnose → Absturzdaten | anonymer Fehlerbericht (Fehlermeldung, Bildschirm, Plattform, App-Version; keine Konto-ID, keine IP), 30 Tage | **nein** | nein | App-Funktionalität |
 
    - **Tracking: Nein.** Keine Werbung, keine Analyse-Tools, keine KI.
+   - Dieselben Angaben stehen im **Privacy Manifest** der App (`native/ios/PrivacyInfo.xcprivacy`). `npm run native:setup` kopiert es nach `ios/App/App/` und trägt es ins Xcode-Projekt ein. Es erklärt auch, warum die App Datei-Zeitstempel liest (`@capacitor/filesystem` für den Datenexport, Grund C617.1). Ohne diese Angabe lehnt App Store Connect den Upload per E-Mail ab (ITMS-91053). Ändern sich die Daten oben, beide Stellen anpassen.
    - Sitzungen speichern IP-Adresse und Browser-Kennung nur zur Sicherheit der Anmeldung. Gib das unter „Andere Diagnosedaten“ an, wenn du ganz vorsichtig sein willst.
 5. **Preis:** kostenlos. **Verfügbarkeit:** z. B. Österreich, Deutschland, Schweiz.
 6. **Version:**
@@ -165,6 +167,7 @@ Für die Anmeldung musst du nichts extra einrichten: Die App meldet sich mit E-M
      | Nachrichten → Andere In-App-Nachrichten | ja | nein | App-Funktionen | nein |
      | App-Aktivitäten → Sonstige nutzergenerierte Inhalte (Profilsätze, Meldungen) | ja | nein | App-Funktionen, Sicherheit | nein |
      | App-Aktivitäten → In-App-Interaktionen (Swipes, Matches, Blockierungen) | ja | nein | App-Funktionen | nein |
+     | App-Infos und -Leistung → Absturzprotokolle (anonym, 30 Tage) | ja | nein | Analyse (Fehler beheben) | nein |
 
      - Daten werden bei der Übertragung **verschlüsselt** (HTTPS): ja.
      - Die Android-App macht **keine Sicherung** (kein Google-Drive-/adb-Backup): `npm run native:setup` setzt `android:allowBackup="false"`, damit Anmeldung und Chats nicht in einem Backup oder auf einem anderen Gerät landen.
@@ -254,6 +257,7 @@ Push ist vorbereitet, aber aus (`pushNotificationsEnabled` in `src/lib/native.ts
 
 - [ ] Produktions-URL festgelegt, `BETTER_AUTH_URL` zeigt darauf
 - [ ] `npm run native:setup` mit `VELA_APP_URL` ausgeführt
+- [x] iOS Privacy Manifest (`PrivacyInfo.xcprivacy`, kein Tracking, Datei-Zeitstempel C617.1) wird von `native:setup` eingebunden
 - [x] „Mit Apple anmelden“ derzeit nicht nötig (nur E-Mail + Passwort); erst bei Social-Login ergänzen (4.8)
 - [x] Wortfilter, Blockieren, Melden und Sperre wegen Regelverstoß auf /admin/age (Apple 1.2)
 - [x] AGB mit Regeln („keine Toleranz“) beim Profil-Anlegen akzeptiert (Apple 1.2)

@@ -9,11 +9,13 @@
  * 3. renders icons + splash screens (scripts/native-assets.mjs)
  * 4. patches Info.plist / AndroidManifest (vela:// deep link for login,
  *    camera/photo texts, portrait-only iPhone, dark splash colors, no
- *    Android backup of the session/chats)
+ *    Android backup of the session/chats), adds the iOS privacy manifest
+ *    (native/ios/PrivacyInfo.xcprivacy, required by Apple)
  * 5. `cap sync`
  */
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { addPrivacyManifestToPbxproj, PRIVACY_MANIFEST } from "./ios-privacy-manifest.mjs";
 
 const SCHEME = "vela";
 const BG = "#12100E";
@@ -100,6 +102,21 @@ if (existsSync(plist)) {
   edit("ios/App/App.xcodeproj/project.pbxproj", (s) =>
     s.replace(/TARGETED_DEVICE_FAMILY = "1,2";/g, "TARGETED_DEVICE_FAMILY = 1;"),
   );
+  // Apple privacy manifest: no tracking, collected data as in STORE.md, and
+  // the file-timestamp reason @capacitor/filesystem needs (else App Store
+  // Connect rejects the upload with ITMS-91053). Always refreshed from the repo.
+  copyFileSync(`native/ios/${PRIVACY_MANIFEST}`, `ios/App/App/${PRIVACY_MANIFEST}`);
+  edit("ios/App/App.xcodeproj/project.pbxproj", (s) => {
+    const patched = addPrivacyManifestToPbxproj(s);
+    if (patched === null) {
+      console.warn(
+        `WARNUNG: ${PRIVACY_MANIFEST} konnte nicht ins Xcode-Projekt eingetragen werden. ` +
+          `In Xcode die Datei ios/App/App/${PRIVACY_MANIFEST} zum Ziel „App“ hinzufügen.`,
+      );
+      return s;
+    }
+    return patched;
+  });
 }
 
 // ── Android ─────────────────────────────────────────────────────────────────
