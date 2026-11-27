@@ -4,6 +4,7 @@ import type { Suspension } from "@/lib/vela/data";
 import { useVela } from "@/lib/vela/store";
 import { PrimaryButton, Wordmark } from "@/components/vela/ui";
 import { LegalLinks } from "@/components/vela/legal";
+import { DataExportButton } from "@/components/vela/data-export";
 import { signOut } from "@/lib/auth/client";
 
 /** Re-encode the ID photo to JPEG (strips EXIF/GPS), max 1600 px, ≤ ~1.4 MB. */
@@ -74,12 +75,13 @@ function Banned() {
         nicht swipen oder schreiben.
       </p>
       <p className="mt-3 text-base text-muted">
-        Wenn du das für einen Irrtum hältst, schreib an die E-Mail-Adresse im Impressum. Dein Konto kannst du hier
-        jederzeit löschen; eine neue Anmeldung mit derselben E-Mail-Adresse ist dann bis zu 12 Monate weiter gesperrt.
+        Wenn du das für einen Irrtum hältst, schreib an die E-Mail-Adresse im Impressum. Deine Daten kannst du hier
+        herunterladen und dein Konto jederzeit löschen; eine neue Anmeldung mit derselben E-Mail-Adresse ist dann bis zu 12 Monate weiter gesperrt.
       </p>
       <button type="button" onClick={() => void signOut("/")} className="mt-8 h-11 text-sm text-muted">
         Abmelden
       </button>
+      <DataExportButton />
       <DeleteAccount />
       <LegalLinks className="mt-4" />
     </div>
@@ -171,6 +173,7 @@ function AgeSuspended({ suspension }: { suspension: Suspension }) {
       <button type="button" onClick={() => void signOut("/")} className="mt-8 h-11 text-sm text-muted">
         Abmelden
       </button>
+      <DataExportButton />
       <DeleteAccount />
       <LegalLinks className="mt-4" />
     </div>

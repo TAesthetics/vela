@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ACTION_LIMITED_TEXT, LOAD_LIMITED_TEXT, SIGNED_OUT_TEXT, failureText, isActionLimited, isLoadLimited, isOffline, isUnauthorized, loadFailureText, type FailedAction } from "./request-failure.ts";
+import { ACTION_LIMITED_TEXT, EXPORT_LIMITED_TEXT, LOAD_LIMITED_TEXT, SIGNED_OUT_TEXT, exportFailureText, failureText, isActionLimited, isLoadLimited, isOffline, isShareCanceled, isUnauthorized, loadFailureText, type FailedAction } from "./request-failure.ts";
 
 const ACTIONS: FailedAction[] = ["save", "swipe", "undo", "send", "block", "report", "uploadId", "older", "plus"];
 
@@ -69,4 +69,18 @@ test("isActionLimited only matches the server's action-limit answer", () => {
   assert.equal(isActionLimited(undefined), false);
   assert.ok(!ACTION_LIMITED_TEXT.startsWith("Keine Verbindung."), "not an offline text");
   assert.notEqual(ACTION_LIMITED_TEXT, LOAD_LIMITED_TEXT);
+});
+
+test("data export failures say what happened, a closed share sheet says nothing", () => {
+  assert.equal(exportFailureText(new Error(EXPORT_LIMITED_TEXT), false), EXPORT_LIMITED_TEXT);
+  assert.equal(exportFailureText({ message: EXPORT_LIMITED_TEXT }, true), EXPORT_LIMITED_TEXT);
+  assert.equal(exportFailureText(new Error("Unauthorized"), false), SIGNED_OUT_TEXT);
+  assert.ok(exportFailureText(new Error("Failed to fetch"), true)?.startsWith("Keine Verbindung."));
+  assert.equal(exportFailureText(new Error("boom"), false), "Export ging gerade nicht. Versuch es gleich nochmal.");
+  // Capacitor Share (iOS and Android) and the Web Share API when the sheet is closed.
+  assert.equal(exportFailureText(new Error("Share canceled"), false), null);
+  assert.equal(exportFailureText(Object.assign(new Error("x"), { name: "AbortError" }), false), null);
+  assert.equal(isShareCanceled(new Error("Failed to fetch")), false);
+  assert.equal(isShareCanceled(null), false);
+  assert.equal(isShareCanceled("Share canceled"), false);
 });

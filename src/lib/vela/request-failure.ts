@@ -101,3 +101,35 @@ export const ACTION_LIMITED_TEXT = "Gerade kam sehr viel auf einmal an. Warte ei
 export function isActionLimited(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { message?: unknown }).message === ACTION_LIMITED_TEXT;
 }
+
+/**
+ * exportMyData refused because this login exported too often within an hour
+ * (DATA_EXPORT_RULE in api.ts). Shown as is, never reported.
+ */
+export const EXPORT_LIMITED_TEXT = "Du hast gerade schon mehrmals exportiert. Versuch es in ein paar Minuten noch einmal.";
+
+/**
+ * True when the person closed the share sheet without picking a target:
+ * Capacitor Share rejects with "Share canceled", the Web Share API with an
+ * AbortError. Not a failure, so nothing is shown.
+ */
+export function isShareCanceled(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const { name, message } = err as { name?: unknown; message?: unknown };
+  return name === "AbortError" || (typeof message === "string" && /share cancell?ed/i.test(message));
+}
+
+/**
+ * What "Meine Daten herunterladen" says when it fails, or null when nothing
+ * should be shown (share sheet closed on purpose). Before, every failure read
+ * "Export ging gerade nicht", even the server's "exported too often" answer.
+ */
+export function exportFailureText(err: unknown, offline: boolean): string | null {
+  if (isShareCanceled(err)) return null;
+  if (typeof err === "object" && err !== null && (err as { message?: unknown }).message === EXPORT_LIMITED_TEXT) {
+    return EXPORT_LIMITED_TEXT;
+  }
+  if (isUnauthorized(err)) return SIGNED_OUT_TEXT;
+  if (offline) return "Keine Verbindung. Der Export geht, sobald du wieder Netz hast.";
+  return "Export ging gerade nicht. Versuch es gleich nochmal.";
+}

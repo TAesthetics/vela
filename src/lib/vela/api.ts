@@ -5,7 +5,7 @@ import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { errorMonitor } from "@/lib/vela/error-monitor";
 import { userFacingError } from "@/lib/vela/user-facing-error";
-import { ACTION_LIMITED_TEXT, LOAD_LIMITED_TEXT } from "@/lib/vela/request-failure";
+import { ACTION_LIMITED_TEXT, EXPORT_LIMITED_TEXT, LOAD_LIMITED_TEXT } from "@/lib/vela/request-failure";
 import {
   FREE_SWIPES,
   SWIPE_CAPS,
@@ -1401,7 +1401,7 @@ export const exportMyData = createServerFn({ method: "POST" })
     const id = context.userId;
     const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
     if (!(await consumeRateLimit(sql, `vela:data-export:${id}`, DATA_EXPORT_RULE))) {
-      throw userFacingError("Du hast gerade schon mehrmals exportiert. Versuch es in ein paar Minuten noch einmal.");
+      throw userFacingError(EXPORT_LIMITED_TEXT);
     }
     const safe = async <T>(query: () => Promise<T[]>): Promise<T[]> => {
       try {

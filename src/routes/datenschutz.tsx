@@ -177,7 +177,9 @@ function Datenschutz() {
           Eine Kopie deiner Daten (Konto, Profil, Foto, deine Swipes, deine gesendeten Nachrichten, Blockierungen,
           deine Meldungen, Abo-Status, Altersprüfung und Sitzungen) kannst du jederzeit selbst herunterladen:
           Ich → „Meine Daten herunterladen“. Du bekommst sie als JSON-Datei, einem gängigen, maschinenlesbaren
-          Format (Art. 20 DSGVO). Andere Personen erscheinen darin nur als ID.
+          Format (Art. 20 DSGVO). Andere Personen erscheinen darin nur als ID. Das geht auch, wenn dein Konto
+          gesperrt ist: Der Knopf steht dann auf dem Sperr-Bildschirm. In der App öffnet sich das Teilen-Menü, dort kannst
+          du die Datei z. B. in „Dateien“ oder Google Drive sichern.
         </p>
         <p>
           Du kannst dich außerdem bei der österreichischen Datenschutzbehörde beschweren:

@@ -21,7 +21,7 @@ import { FieldLabel, LengthHint, Portrait, PrimaryButton, TextInput, cn } from "
 import { useBack, useDialogFocus } from "@/components/vela/use-back";
 import { SafetyMenu } from "@/components/vela/safety";
 import { LegalLinks } from "@/components/vela/legal";
-import { exportMyData } from "@/lib/vela/api";
+import { DataExportButton } from "@/components/vela/data-export";
 import { isNativeApp } from "@/lib/native";
 import { weakPasswordReason } from "@/lib/vela/password-policy";
 import { isActiveStatus } from "@/lib/vela/subscription-state";
@@ -388,26 +388,6 @@ export function PersonView({
   );
 }
 
-async function downloadMyData() {
-  const data = await exportMyData();
-  const name = `vela-daten-${new Date().toISOString().slice(0, 10)}.json`;
-  const blob = new Blob([data], { type: "application/json" });
-  // In the store apps a download link does nothing; hand the file to the share sheet.
-  const file = typeof File === "function" ? new File([blob], name, { type: "application/json" }) : null;
-  if (file && typeof navigator.canShare === "function" && navigator.canShare({ files: [file] }) && isNativeApp()) {
-    await navigator.share({ files: [file], title: "Meine VELA-Daten" });
-    return;
-  }
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
-
 function ChangePassword() {
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState("");
@@ -573,7 +553,6 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
   const [draft, setDraft] = useState(me);
   const [arm, setArm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -717,20 +696,7 @@ export function MeScreen({ onPlus }: { onPlus: () => void }) {
       <ChangePassword />
       <SignOutOtherDevices />
 
-      <button
-        type="button"
-        disabled={exporting}
-        onClick={() => {
-          setExporting(true);
-          void downloadMyData()
-            .then(() => setNote("Export erstellt."))
-            .catch(() => setNote("Export ging gerade nicht. Versuch es gleich nochmal."))
-            .finally(() => setExporting(false));
-        }}
-        className="mt-6 block h-11 text-sm text-muted"
-      >
-        {exporting ? "Export wird erstellt…" : "Meine Daten herunterladen"}
-      </button>
+      <DataExportButton className="mt-6" />
 
       <button
         type="button"
