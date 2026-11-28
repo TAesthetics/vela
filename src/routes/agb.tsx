@@ -63,17 +63,30 @@ function Agb() {
           kündigst. Bezahlt wird im Voraus für den jeweiligen Monat über unseren Zahlungsdienstleister Stripe (Karte,
           Apple Pay, Google Pay oder andere dort angebotene Zahlungsarten).
         </p>
+        <p id="store">
+          Kaufst du Vela+ in der iOS- oder Android-App, wird über dein Apple-Konto (App Store) bzw. dein Google-Konto
+          (Google Play) abgerechnet; es gilt der Preis, der dir dort vor dem Kauf angezeigt wird. Das Abo verlängert
+          sich automatisch um jeweils einen Monat, wenn du es nicht mindestens 24 Stunden vor Ende des laufenden
+          Zeitraums in den Abo-Einstellungen deines Apple- bzw. Google-Kontos kündigst. Hast du Vela+ schon gekauft,
+          etwa auf einem anderen Gerät oder nach einer Neuinstallation, holst du es im Vela+-Bildschirm der App über
+          „Käufe wiederherstellen“ zurück. Käufe auf der Website laufen weiterhin über Stripe.
+        </p>
       </Section>
 
       <Section title="5. Kündigung">
         <p>
-          Du kannst jederzeit kündigen, ohne Frist: in der App unter Vela+ → „Abo verwalten“ oder per E-Mail an{" "}
+          Ein über die Website abgeschlossenes Abo kannst du jederzeit kündigen, ohne Frist: in der App unter Vela+ → „Abo verwalten“ oder per E-Mail an{" "}
           {OPERATOR.email}. Die Kündigung wirkt zum Ende des bereits bezahlten Monats; bis dahin bleibt Vela+ aktiv.
           Löschst du dein Konto, endet ein laufendes Abo sofort; bereits bezahlte Zeiträume werden dabei nicht
           anteilig erstattet, außer im Fall eines Widerrufs (Punkt 6).
         </p>
         <p>
           Schlägt eine Zahlung fehl, versucht Stripe sie einige Male erneut. Klappt sie nicht, endet Vela+.
+        </p>
+        <p>
+          Ein in der App gekauftes Abo kündigst du nicht bei uns, sondern in den Abo-Einstellungen deines Apple- bzw.
+          Google-Kontos (spätestens 24 Stunden vor Ende des Zeitraums, siehe Punkt 4). Auch das Löschen deines
+          Vela-Kontos beendet ein solches Abo nicht; kündige es daher vorher im Store.
         </p>
       </Section>
 
@@ -88,12 +101,18 @@ function Agb() {
           startet. Widerrufst du danach, zahlst du nur den anteiligen Betrag für die Tage bis zum Widerruf (§ 16
           FAGG); den Rest erstatten wir innerhalb von 14 Tagen über dieselbe Zahlungsart zurück.
         </p>
+        <p>
+          Bei Käufen in der App wickeln Apple bzw. Google die Zahlung ab. Widerruf und Erstattung laufen dann über
+          sie und nach ihren Regeln (Apple: reportaproblem.apple.com, Google: Bestellverlauf in Google Play); wir
+          können In-App-Käufe nicht selbst erstatten.
+        </p>
       </Section>
 
       <Section title="7. Preisänderungen">
         <p>
           Preisänderungen kündigen wir mindestens 30 Tage vorher per E-Mail an. Sie gelten erst ab dem nächsten
-          Abrechnungsmonat nach Ablauf dieser Frist, und du kannst vorher kündigen.
+          Abrechnungsmonat nach Ablauf dieser Frist, und du kannst vorher kündigen. Bei Abos aus der App informieren
+          dich Apple bzw. Google über Preisänderungen nach ihren Regeln.
         </p>
       </Section>
 

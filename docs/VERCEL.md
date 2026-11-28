@@ -115,9 +115,10 @@ In RevenueCat: ein Angebot („Offering“) als aktuell markieren mit einem Mona
 die Berechtigung `plus` freischaltet.
 
 Vor dem Einschalten (also bevor `REVENUECAT_IOS_KEY`/`REVENUECAT_ANDROID_KEY` gesetzt werden):
-Datenschutzerklärung um RevenueCat (und Apple/Google als Zahlungsabwickler) ergänzen, in den AGB
-unter Vela+ die Bezahlung und Kündigung über App Store / Google Play beschreiben und die
-Store-Datenschutzangaben um „Käufe“ ergänzen (siehe `docs/STORE.md`).
+die Store-Datenschutzangaben um „Käufe“ ergänzen (siehe `docs/STORE.md`). Datenschutzerklärung
+(Punkt 8: RevenueCat als Auftragsverarbeiter, Apple/Google als Zahlungsabwickler) und AGB (Punkt 4–7:
+Bezahlung, Verlängerung, Kündigung und Erstattung über App Store / Google Play) sind schon ergänzt.
+RevenueCat-Auftragsverarbeitung: Der DPA (revenuecat.com/dpa) gilt automatisch mit dem Konto.
 
 ## 7. Täglicher Retention-Cron (DSGVO)
 

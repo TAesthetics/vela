@@ -103,9 +103,9 @@ function Datenschutz() {
         </p>
       </Section>
 
-      <Section title="8. Vela+ und Zahlungen über Stripe">
+      <Section title="8. Vela+ und Zahlungen (Stripe, App Store, Google Play)">
         <p>
-          Wenn du Vela+ abschließt, läuft die Zahlung über Stripe. Vertragspartner für die Zahlungsabwicklung ist
+          Wenn du Vela+ auf der Website abschließt, läuft die Zahlung über Stripe. Vertragspartner für die Zahlungsabwicklung ist
           Stripe Payments Europe, Ltd., 1 Grand Canal Street Lower, Grand Canal Dock, Dublin, D02 H210, Irland.
           Deine Zahlungsdaten (z. B. Karte, Apple Pay oder Google Pay) gibst du direkt auf der Bezahlseite von
           Stripe ein; wir sehen und speichern sie nie. Stripe verarbeitet sie als eigener Verantwortlicher bzw. als
@@ -123,6 +123,29 @@ function Datenschutz() {
           Rechnungen und Zahlungsbelege werden bei Stripe gespeichert und aus steuerrechtlichen Gründen 7 Jahre
           aufbewahrt (§ 132 BAO). Löschst du dein Konto, beenden wir ein laufendes Abo sofort und löschen die
           Abo-Daten in unserer Datenbank; die Belege bei Stripe bleiben bis zum Ablauf dieser Frist erhalten.
+        </p>
+        <p>
+          Kaufst du Vela+ in der iOS- oder Android-App, läuft die Zahlung über den App Store von Apple (Apple
+          Distribution International Ltd., Irland) bzw. über Google Play (Google Ireland Limited, Irland). Deine
+          Zahlungsdaten gibst du dort in deinem Apple- bzw. Google-Konto an; wir sehen und speichern sie nie.
+          Apple und Google verarbeiten den Kauf als eigene Verantwortliche nach ihren eigenen
+          Datenschutzbestimmungen.
+        </p>
+        <p>
+          Um In-App-Käufe zu prüfen und den Abo-Status deinem Konto zuzuordnen, nutzen wir RevenueCat, Inc., 1032 E
+          Brandon Blvd #3003, Brandon, FL 33511, USA, als Auftragsverarbeiter (Art. 28 DSGVO). Dabei verarbeitet
+          RevenueCat: deine Nutzerkennung bei Vela (nicht deine E-Mail-Adresse und nicht deinen Namen), Kauf-, Abo-
+          und Transaktionsdaten aus dem Store (z. B. Produkt, Kaufbeleg, Zeitraum, Status) sowie technische Daten
+          deines Geräts (z. B. Plattform, App-Version, Land bzw. Sprache und IP-Adresse). Eine Werbe-ID geben wir
+          nicht weiter. RevenueCat übermittelt diese Daten in die USA; dafür gelten die Standardvertragsklauseln der
+          EU-Kommission (Art. 46 DSGVO) aus dem Auftragsverarbeitungsvertrag von RevenueCat. Rechtsgrundlage:
+          Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO).
+        </p>
+        <p>
+          Von RevenueCat erhalten und speichern wir nur: Store (App Store oder Google Play), Produkt, Ende des
+          bezahlten Zeitraums und ob Vela+ aktiv ist. Löschst du dein Konto, löschen wir diese Angaben sofort. Ein
+          In-App-Abo können wir nicht für dich beenden; kündige es vorher in den Abo-Einstellungen deines Apple- bzw.
+          Google-Kontos.
         </p>
       </Section>
 
@@ -146,7 +169,7 @@ function Datenschutz() {
           Die App wird bei Vercel Inc. (USA) gehostet; die Datenbank liegt bei {OPERATOR.database}.
           Diese Anbieter verarbeiten Daten in unserem Auftrag (Art. 28 DSGVO). Bei Übermittlungen in die
           USA stützen wir uns auf das EU-US Data Privacy Framework bzw. Standardvertragsklauseln. Für Zahlungen bei
-          Vela+ siehe Punkt 8 (Stripe). Eine Weitergabe an sonstige Dritte oder ein Verkauf deiner Daten findet nicht statt.
+          Vela+ siehe Punkt 8 (Stripe, Apple, Google und RevenueCat). Eine Weitergabe an sonstige Dritte oder ein Verkauf deiner Daten findet nicht statt.
         </p>
       </Section>
 
