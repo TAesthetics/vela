@@ -1,3 +1,5 @@
+import type { StoreSdk } from "./in-app-purchase";
+
 export type Orbit = "slow" | "adventure" | "depth" | "light" | "real";
 
 export type Prompt = { id: string; q: string; a: string };
@@ -78,6 +80,8 @@ export type Billing = {
   store?: "app_store" | "play_store" | null;
   /** Epoch ms when that in-app purchase runs out (renews before, unless cancelled). */
   storeUntil?: number | null;
+  /** Set once VELA+ can be bought in the iOS/Android app (RevenueCat fully set up). */
+  storeSdk?: StoreSdk | null;
 };
 
 export const PLUS_PRICE_LABEL = "10 €";

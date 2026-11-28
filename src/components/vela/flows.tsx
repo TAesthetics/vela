@@ -22,6 +22,8 @@ import { useBack, useDialogFocus } from "@/components/vela/use-back";
 import { SafetyMenu } from "@/components/vela/safety";
 import { LegalLinks } from "@/components/vela/legal";
 import { DataExportButton } from "@/components/vela/data-export";
+import { InAppPlus } from "@/components/vela/in-app-plus";
+import { canBuyInApp } from "@/lib/vela/in-app-store";
 import { isNativeApp } from "@/lib/native";
 import { weakPasswordReason } from "@/lib/vela/password-policy";
 import { isActiveStatus } from "@/lib/vela/subscription-state";
@@ -736,10 +738,12 @@ export function Plus({ onBack }: { onBack: () => void }) {
   const managePlus = useVela((state) => state.managePlus);
   const [busy, setBusy] = useState(false);
   // Store apps (iOS/Android): no Stripe checkout and no link to it. Apple 3.1.1
-  // and Google Play Billing require in-app purchase for digital subscriptions,
-  // which is not wired up yet. Existing subscribers still get Plus.
+  // and Google Play Billing require in-app purchase for digital subscriptions:
+  // sold via RevenueCat once the server sends SDK keys and the app build has
+  // the plugin, else "noch nicht". Existing subscribers still get Plus.
   const [native, setNative] = useState(false);
   useEffect(() => setNative(isNativeApp()), []);
+  const storeSdk = native && billing.storeSdk && canBuyInApp(billing.storeSdk) ? billing.storeSdk : null;
   const periodEnd = billing.periodEnd
     ? new Intl.DateTimeFormat("de-AT", { day: "numeric", month: "long", year: "numeric" }).format(
         new Date(billing.periodEnd),
@@ -787,16 +791,23 @@ export function Plus({ onBack }: { onBack: () => void }) {
             </li>
           ))}
         </ul>
-        <p className="mt-6 font-display text-4xl text-paper tabular-nums">
-          {PLUS_PRICE_LABEL} <span className="font-sans text-base text-muted">/ Monat, jederzeit kündbar</span>
-        </p>
-        <p className="mt-2 text-sm text-muted">
-          {plusAvailable
-            ? "In dieser Vorschau ohne Abbuchung."
-            : native
-              ? "In der App kommt Vela+ bald."
-              : "Mit Karte, Apple Pay oder Google Pay. Die Zahlung läuft sicher über Stripe."}
-        </p>
+        {/* In the store app the price comes from the store itself (InAppPlus). */}
+        {!(storeSdk && !plus && !plusAvailable) && (
+          <>
+            <p className="mt-6 font-display text-4xl text-paper tabular-nums">
+              {PLUS_PRICE_LABEL} <span className="font-sans text-base text-muted">/ Monat, jederzeit kündbar</span>
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              {plusAvailable
+                ? "In dieser Vorschau ohne Abbuchung."
+                : native
+                  ? storeSdk
+                    ? "In der App über den Store deines Handys."
+                    : "In der App kommt Vela+ bald."
+                  : "Mit Karte, Apple Pay oder Google Pay. Die Zahlung läuft sicher über Stripe."}
+            </p>
+          </>
+        )}
         <div className="mt-6 grid gap-3">
           {plus ? (
             <>
@@ -825,6 +836,8 @@ export function Plus({ onBack }: { onBack: () => void }) {
             </>
           ) : plusAvailable ? (
             <PrimaryButton onClick={() => void unlockPlus()}>In der Vorschau freischalten</PrimaryButton>
+          ) : storeSdk ? (
+            <InAppPlus sdk={storeSdk} />
           ) : native ? (
             <p className="rounded-full bg-surface px-4 py-3 text-center text-sm text-muted">
               Vela+ lässt sich in der App noch nicht abschließen.

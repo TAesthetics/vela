@@ -86,8 +86,13 @@ Abrechnungszeitraums“).
 
 Der Server kann Käufe aus App Store und Google Play schon annehmen; solange die
 Variablen fehlen, antwortet `/api/revenuecat/webhook` mit 400 und nichts ändert sich.
-Plus gilt, solange Stripe **oder** der In-App-Kauf aktiv ist. Die App selbst braucht
-noch das RevenueCat-SDK mit `Purchases.logIn(<VELA-Konto-ID>)` und einen Kaufknopf.
+Plus gilt, solange Stripe **oder** der In-App-Kauf aktiv ist. Auch der Kaufknopf in der App ist
+fertig (`@revenuecat/purchases-capacitor`, von `npm run native:setup` eingebunden, meldet den
+Käufer mit seiner VELA-Konto-ID an): Er erscheint erst, wenn Webhook, geheimer Schlüssel **und**
+der öffentliche SDK-Schlüssel der Plattform gesetzt sind. Preis und Zeitraum kommen aus dem Store,
+dazu „Käufe wiederherstellen“, Hinweis zur automatischen Verlängerung und Links zu AGB und
+Datenschutz (Apple 3.1.2). Nach dem Kauf fragt der Server sofort selbst bei RevenueCat nach
+(`refreshStorePlus`), der Webhook bleibt die zweite Absicherung.
 
 | Variable | Wert |
 | --- | --- |
@@ -95,6 +100,8 @@ noch das RevenueCat-SDK mit `Purchases.logIn(<VELA-Konto-ID>)` und einen Kaufkno
 | `REVENUECAT_SECRET_KEY` | RevenueCat → Projekt → API-Schlüssel → geheimer Schlüssel (`sk_…`) |
 | `REVENUECAT_WEBHOOK_SECRET` | optional: HMAC-Signatur-Geheimnis des Webhooks |
 | `REVENUECAT_ENTITLEMENT` | optional, Kennung der Berechtigung; Standard `plus` |
+| `REVENUECAT_IOS_KEY` | öffentlicher SDK-Schlüssel der iOS-App (`appl_…`), zeigt den Kaufknopf in der iPhone-App |
+| `REVENUECAT_ANDROID_KEY` | öffentlicher SDK-Schlüssel der Android-App (`goog_…`), zeigt den Kaufknopf in der Android-App |
 
 Webhook (RevenueCat → Integrationen → Webhooks): `https://<deine-domain>/api/revenuecat/webhook`,
 Produktion und Sandbox (Apple prüft Käufe in der Sandbox). Jedes Ereignis liest den Stand
@@ -102,7 +109,15 @@ frisch bei RevenueCat nach, Reihenfolge und Doppelte sind egal. Gespeichert wird
 Store, Produkt, Ablaufdatum und aktiv ja/nein (Tabelle `vela_store_purchases`), gelöscht
 mit dem Konto. In-App-Abos kann VELA nicht selbst kündigen; die App weist beim
 Konto-Löschen darauf hin.
-Vor dem Einschalten: Datenschutzerklärung um RevenueCat (und Apple/Google als Zahlungsabwickler) ergänzen.
+Die SDK-Schlüssel sind öffentlich (sie stecken in jeder App), der Server gibt aber nur Werte mit
+`appl_`- bzw. `goog_`-Anfang weiter; ein versehentlich eingetragener `sk_…`-Schlüssel erreicht nie ein Handy.
+In RevenueCat: ein Angebot („Offering“) als aktuell markieren mit einem Monats-Paket, dessen Produkt
+die Berechtigung `plus` freischaltet.
+
+Vor dem Einschalten (also bevor `REVENUECAT_IOS_KEY`/`REVENUECAT_ANDROID_KEY` gesetzt werden):
+Datenschutzerklärung um RevenueCat (und Apple/Google als Zahlungsabwickler) ergänzen, in den AGB
+unter Vela+ die Bezahlung und Kündigung über App Store / Google Play beschreiben und die
+Store-Datenschutzangaben um „Käufe“ ergänzen (siehe `docs/STORE.md`).
 
 ## 7. Täglicher Retention-Cron (DSGVO)
 

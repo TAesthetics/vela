@@ -5,6 +5,7 @@ import {
   loadOlderMessages,
   loadVela,
   openPlusPortal,
+  refreshStorePlus,
   reportUser,
   startPlusCheckout,
   uploadIdDocument,
@@ -64,6 +65,11 @@ type VelaStore = {
   /** Opens Stripe Checkout (or the billing portal). Resolves with an error text, null when redirecting. */
   checkoutPlus: () => Promise<string | null>;
   managePlus: () => Promise<string | null>;
+  /**
+   * After a purchase or restore in the iOS/Android store: the server re-reads
+   * this account from RevenueCat. Resolves with an error text or null. Never throws.
+   */
+  confirmStorePlus: () => Promise<string | null>;
   block: (personId: string) => Promise<boolean>;
   uploadId: (image: string) => Promise<string | null>;
   report: (personId: string, reason: string, details: string) => Promise<boolean>;
@@ -400,6 +406,23 @@ export const useVela = create<VelaStore>((set, get) => ({
       set({ toast: error });
       return error;
     }
+  },
+  confirmStorePlus: async () => {
+    let result;
+    try {
+      result = await refreshStorePlus();
+    } catch (err) {
+      const error = failed("plus", err);
+      set({ toast: error });
+      return error;
+    }
+    if (!result.snapshot) {
+      set({ toast: result.error });
+      return result.error;
+    }
+    const error = result.error ?? (result.snapshot.plus ? null : "Kein aktives Vela+ in diesem Store gefunden.");
+    set(apply(keepOlder(result.snapshot, get().threads), { toast: error ?? "Vela+ ist an." }));
+    return error;
   },
   uploadId: async (image) => {
     let result;

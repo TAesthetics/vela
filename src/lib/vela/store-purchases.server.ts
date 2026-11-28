@@ -9,6 +9,9 @@
  *                              customer after every event (order-safe)
  *   REVENUECAT_WEBHOOK_SECRET  optional HMAC signing secret of the webhook
  *   REVENUECAT_ENTITLEMENT     entitlement identifier, default "plus"
+ *   REVENUECAT_IOS_KEY         public SDK key for iOS (appl_...), shows the
+ *                              in-app purchase button in the iOS app
+ *   REVENUECAT_ANDROID_KEY     public SDK key for Android (goog_...), same
  *
  * The app must identify buyers with their VELA account id
  * (Purchases.logIn(userId)), so app_user_id is the VELA user id.
@@ -17,11 +20,35 @@ import type { Sql } from "@/lib/db";
 import { env } from "@/lib/env.server";
 import { syncPlus } from "./stripe.server";
 import { entitlementFromSubscriber, eventUserIds, type StoreEntitlement } from "./store-entitlement";
+import { publicSdkKeys, type StoreSdk } from "./in-app-purchase";
 
 export class RevenueCatError extends Error {}
 
 export function revenueCatConfigured(): boolean {
   return Boolean(env("REVENUECAT_WEBHOOK_AUTH") && env("REVENUECAT_SECRET_KEY"));
+}
+
+/**
+ * What the app needs to sell VELA+ in the store, or null. Only once the
+ * server side works (webhook + secret key), so nobody can pay in the app
+ * without VELA+ being switched on afterwards.
+ */
+export function storeSdkFor(userId: string): StoreSdk | null {
+  if (!revenueCatConfigured()) return null;
+  const keys = publicSdkKeys({
+    REVENUECAT_IOS_KEY: env("REVENUECAT_IOS_KEY"),
+    REVENUECAT_ANDROID_KEY: env("REVENUECAT_ANDROID_KEY"),
+  });
+  return keys ? { ...keys, appUserId: userId } : null;
+}
+
+/**
+ * Re-read one account from RevenueCat right after a purchase or restore in
+ * the app, so VELA+ starts without waiting for the webhook. Trusts only
+ * RevenueCat's answer, never the app.
+ */
+export async function refreshStoreEntitlement(sql: Sql, userId: string): Promise<void> {
+  await saveEntitlement(sql, userId, await fetchEntitlement(userId));
 }
 
 function entitlementId(): string {

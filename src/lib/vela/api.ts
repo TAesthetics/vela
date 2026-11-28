@@ -172,6 +172,7 @@ async function billingSnapshot(sql: Sql, userId: string): Promise<Billing> {
   const purchase = await stripe.storePurchaseOf(sql, userId);
   const storeActive = storeRowActive(purchase);
   const storeEnd = purchase?.expires_at ? new Date(purchase.expires_at).getTime() : null;
+  const { storeSdkFor } = await import("@/lib/vela/store-purchases.server");
   return {
     configured: stripe.stripeConfigured(),
     customer: Boolean(row?.stripe_customer_id),
@@ -181,6 +182,7 @@ async function billingSnapshot(sql: Sql, userId: string): Promise<Billing> {
     store:
       storeActive && (purchase?.store === "app_store" || purchase?.store === "play_store") ? purchase.store : null,
     storeUntil: storeActive && storeEnd && Number.isFinite(storeEnd) ? storeEnd : null,
+    storeSdk: storeSdkFor(userId),
   };
 }
 
@@ -1157,6 +1159,37 @@ export const startPlusCheckout = createServerFn({ method: "POST" })
       await recordServerError("stripe:checkout", err);
       return { url: null, error: "Die Bezahlseite ließ sich nicht öffnen. Versuch es gleich nochmal." };
     }
+  });
+
+/** Burst guard for the in-app purchase re-check (each one calls RevenueCat). */
+const STORE_REFRESH_RULE = { windowSec: 600, max: 12 };
+
+/**
+ * VELA+ bought or restored in the iOS/Android app: re-read this account from
+ * RevenueCat now instead of waiting for the webhook. The app only says "check
+ * me"; whether VELA+ is on decides RevenueCat's answer, never the app.
+ */
+export const refreshStorePlus = createServerFn({ method: "POST" })
+  .middleware([authMiddleware, errorMonitor])
+  .handler(async ({ context }): Promise<{ error: string | null; snapshot: Snapshot | null }> => {
+    const sql = await getSql();
+    const { consumeRateLimit } = await import("@/lib/vela/rate-limit.server");
+    if (!(await consumeRateLimit(sql, `vela:store-refresh:${context.userId}`, STORE_REFRESH_RULE))) {
+      return { error: "Zu viele Versuche. Versuch es in ein paar Minuten noch einmal.", snapshot: null };
+    }
+    const store = await import("@/lib/vela/store-purchases.server");
+    if (!store.revenueCatConfigured()) return { error: "Käufe in der App sind noch nicht eingerichtet.", snapshot: null };
+    try {
+      await store.refreshStoreEntitlement(sql, context.userId);
+    } catch (err) {
+      await recordServerError("revenuecat:refresh", err);
+      // The webhook still switches VELA+ on a little later.
+      return {
+        error: "Dein Kauf ist beim Store, Vela+ startet in ein paar Minuten.",
+        snapshot: await snapshot(sql, context.userId),
+      };
+    }
+    return { error: null, snapshot: await snapshot(sql, context.userId) };
   });
 
 /** VELA+: Stripe billing portal to cancel, change the payment method or get invoices. */
